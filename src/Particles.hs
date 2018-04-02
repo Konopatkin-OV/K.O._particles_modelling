@@ -4,25 +4,38 @@ import Graphics.Gloss.Interface.IO.Game
 import Graphics.Gloss.Data.Point
 import Graphics.Gloss.Data.Vector
 import Debug.Trace
+import Data.List (intercalate)
 
 run :: IO ()
-run = do world <- load_app "world.txt"
-         let app = App {elems = [world, button_reload], mouse_pos = (0, 0)}
+run = do world <- load_world "world.txt"
+         let app = App {elems = [world, button_load, button_save], mouse_pos = (0, 0)}
          playIO display white 50 app app_draw app_handle_events app_process 
            where
-	         display = (InWindow "TEST" (1000, 800) (0, 0))
-	         b_r_base = IBase {place = (200, 200), 
-	                           size = (200, 50),
-	                           action = (action_click b_r_base (action_button_click 1 action_reload)),  -- "1" - индекс кнопки в списке элементов интерфейса
-	                           draw = draw_button,
-	                           process = process_time
-	                           }
-	         button_reload = Button {ibase = b_r_base,
-	                                 b_text = "Reload",
-	                                 b_col = (makeColor 0.5 0.5 0.5 1.0),
-	                                 b_click_col = (makeColor 0.1 0.7 0.1 1.0),
-	                                 b_text_col = black,
-	                                 b_time = 0.0}
+             display = (InWindow "TEST" (1000, 800) (0, 0))
+             b_l_base = IBase {place = (200, 200), 
+                               size = (200, 50),
+                               action = (action_click b_l_base (action_button_click 1 action_load_world)),  -- "1" - индекс кнопки в списке элементов интерфейса
+                               draw = draw_button,
+                               process = process_time
+                               }
+             button_load = Button {ibase = b_l_base,
+                                   b_text = "Load world",
+                                   b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                   b_click_col = (makeColor 0.1 0.7 0.1 1.0),
+                                   b_text_col = black,
+                                   b_time = 1.0}
+             b_s_base = IBase {place = (200, 100), 
+                               size = (200, 50),
+                               action = (action_click b_s_base (action_button_click 2 action_save_world)),  -- "2" - индекс кнопки в списке элементов интерфейса
+                               draw = draw_button,
+                               process = process_time
+                               }
+             button_save = Button {ibase = b_s_base,
+                                   b_text = "Save world",
+                                   b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                   b_click_col = (makeColor 0.1 0.7 0.1 1.0),
+                                   b_text_col = black,
+                                   b_time = 1.0}
 
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
@@ -110,9 +123,13 @@ action_button_click num f app = f (replace_int num new_button app)
     new_button = old_button {b_time = 0.0}
 
 
-action_reload :: Application -> IO Application
-action_reload app = do r_world <- load_app "world.txt"
-                       return (replace_int 0 r_world app)
+action_load_world :: Application -> IO Application
+action_load_world app = do r_world <- load_world "world.txt"
+                           return (replace_int 0 r_world app)
+
+action_save_world :: Application -> IO Application
+action_save_world app = do save_world ((elems app) !! 0) "world.txt"
+                           return app
 ------------------------------------------------------------------------
 
 -------------------------- отрисовка приложения ------------------------
@@ -186,19 +203,26 @@ process_entity (World (IBase _ (wx, wy) _ _ _) _ _) time (Particle (x, y) (dx, d
 process_entity _ _ e = e
 ------------------------------------------------------------------------
 
+-- изменить один элемент интерфейса
+replace_int :: Int -> Interface -> Application -> Application
+replace_int n new app = app {elems = (take n el) ++ (new : (drop (n + 1) el))}
+                        where el = elems app
+
+------------------------------------------------------------------------
+
 -- загрузка состояния мира их файла, принимает путь к файлу
 -- формат файла: описание частицы в отдельной строке
 -- '#' - комментарий
-load_app :: String -> IO Interface
-load_app file = do file_text <- (readFile file)
-                   let strings = (filter (\s -> ((head (head s)) /= '#')) (map words (lines file_text)))
-                   return World {ibase = IBase {place = (-450, -50), 
-                                                size = (600, 400),
-                                                action = action_pain,
-                                                draw = draw_world,
-                                                process = process_world}
-                                , entities = map load_particle (tail strings)
-                                , back_col = load_color_l (head strings)}
+load_world :: String -> IO Interface
+load_world file = do file_text <- (readFile file)
+                     let strings = (filter (\s -> ((head (head s)) /= '#')) (map words (lines file_text)))
+                     return World {ibase = IBase {place = (-450, -50), 
+                                                  size = (600, 400),
+                                                  action = action_pain,            --------------------------------------------------------------------------------------------- палево!
+                                                  draw = draw_world,               --------------------------------------------------------------------------------------------- палево!
+                                                  process = process_world}         --------------------------------------------------------------------------------------------- палево!
+                                  , entities = map load_particle (tail strings)
+                                  , back_col = load_color_l (head strings)}
                               
 
 load_particle :: [String] -> Entity
@@ -214,7 +238,17 @@ load_color_l (col_r : (col_g : (col_b : (col_a : _)))) = makeColor (read col_r :
 load_color_l _ = black
 
 
--- изменить один элемент интерфейса
-replace_int :: Int -> Interface -> Application -> Application
-replace_int n new app = app {elems = (take n el) ++ (new : (drop (n + 1) el))}
-                        where el = elems app
+-- сохранение мира в файл
+save_world :: Interface -> String -> IO ()
+save_world world file = writeFile file ((write_color (back_col world)) ++ (write_entities (entities world)))
+
+write_color :: Color -> String
+write_color col = drop 5 (show col)
+
+write_entities :: [Entity] -> String
+write_entities ents = foldr write_next_entity "" ents
+
+-- страшная строчка
+write_next_entity :: Entity -> String -> String
+write_next_entity (Particle (x, y) (vx, vy) r col) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, r])) ++ " " ++ (write_color col)
+write_next_entity _ buf = buf
