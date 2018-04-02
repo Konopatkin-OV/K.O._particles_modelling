@@ -175,12 +175,14 @@ process_world :: Float -> Interface -> Interface
 process_world time world = world { entities = (map (process_entity world time) (entities world))}
 
 process_entity :: Interface -> Float -> Entity -> Entity
-process_entity (World (IBase _ (wx, wy) _ _ _) _ _) time (Particle (x, y) (dx, dy) r c) = Particle (new_x, new_y) (dx, dy) r c 
+process_entity (World (IBase _ (wx, wy) _ _ _) _ _) time (Particle (x, y) (dx, dy) r c) = Particle (new_x, new_y) (new_dx, new_dy) r c 
   where
-    new_x = if tmp_x < 0 then tmp_x + wx else (if tmp_x > wx then tmp_x - wx else tmp_x)
+    new_x = if tmp_x < 0 then (-tmp_x) else (if tmp_x > wx then (2 * wx - tmp_x) else tmp_x)
     tmp_x = x + time * dx
-    new_y = if tmp_y < 0 then tmp_y + wy else (if tmp_y > wy then tmp_y - wy else tmp_y)
+    new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
     tmp_y = y + time * dy
+    new_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
+    new_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
 process_entity _ _ e = e
 ------------------------------------------------------------------------
 
