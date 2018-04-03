@@ -8,13 +8,13 @@ import Data.List (intercalate)
 
 run :: IO ()
 run = do world <- load_world "world.txt"
-         let app = App {elems = [world, button_load, button_save], mouse_pos = (0, 0)}
+         let app = App {elems = [world, button_load, button_save, button_reload], mouse_pos = (0, 0)}
          playIO display white 50 app app_draw app_handle_events app_process 
            where
              display = (InWindow "TEST" (1000, 800) (0, 0))
              b_l_base = IBase {place = (200, 200), 
                                size = (200, 50),
-                               action = (action_click b_l_base (action_button_click 1 action_load_world)),  -- "1" - индекс кнопки в списке элементов интерфейса
+                               action = (action_click b_l_base (action_button_click 1 (action_load_world "world.txt"))),  -- "1" - индекс кнопки в списке элементов интерфейса
                                draw = draw_button,
                                process = process_time
                                }
@@ -26,7 +26,7 @@ run = do world <- load_world "world.txt"
                                    b_time = 1.0}
              b_s_base = IBase {place = (200, 100), 
                                size = (200, 50),
-                               action = (action_click b_s_base (action_button_click 2 action_save_world)),  -- "2" - индекс кнопки в списке элементов интерфейса
+                               action = (action_click b_s_base (action_button_click 2 (action_save_world "world.txt"))),  -- "2" - индекс кнопки в списке элементов интерфейса
                                draw = draw_button,
                                process = process_time
                                }
@@ -36,7 +36,19 @@ run = do world <- load_world "world.txt"
                                    b_click_col = (makeColor 0.1 0.7 0.1 1.0),
                                    b_text_col = black,
                                    b_time = 1.0}
-
+             b_r_base = IBase {place = (200, 300), 
+                               size = (200, 50),
+                               action = (action_click b_r_base (action_button_click 3 (action_load_world "base_world.txt"))),  -- "3" - индекс кнопки в списке элементов интерфейса
+                               draw = draw_button,
+                               process = process_time
+                               }
+             button_reload = Button {ibase = b_r_base,
+                                     b_text = "Reload world",
+                                     b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                     b_click_col = (makeColor 0.1 0.7 0.1 1.0),
+                                     b_text_col = black,
+                                     b_time = 1.0}
+------------------------------------------------------------------------------------------------------------------------------
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
   , mouse_pos :: (Float, Float)}   -- положение указателя
@@ -123,13 +135,13 @@ action_button_click num f app = f (replace_int num new_button app)
     new_button = old_button {b_time = 0.0}
 
 
-action_load_world :: Application -> IO Application
-action_load_world app = do r_world <- load_world "world.txt"
-                           return (replace_int 0 r_world app)
+action_load_world :: String -> Application -> IO Application
+action_load_world filename app = do r_world <- load_world filename
+                                    return (replace_int 0 r_world app)
 
-action_save_world :: Application -> IO Application
-action_save_world app = do save_world ((elems app) !! 0) "world.txt"
-                           return app
+action_save_world :: String -> Application -> IO Application
+action_save_world filename app = do save_world ((elems app) !! 0) filename
+                                    return app
 ------------------------------------------------------------------------
 
 -------------------------- отрисовка приложения ------------------------
