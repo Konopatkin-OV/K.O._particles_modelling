@@ -1,5 +1,5 @@
 name:                particles
-version:             0.1
+version:             0.2
 -- synopsis:
 -- description:
 -- homepage:
@@ -15,7 +15,8 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   ghc-options:         -Wall -fno-warn-type-defaults
-  exposed-modules:     Particles
+  exposed-modules:     BaseApp
+                     , Particles
   build-depends:       base >= 4.7 && < 5
                      , gloss
   default-language:    Haskell2010
