@@ -7,6 +7,29 @@ import Data.List (intercalate)
 import Data.Maybe (isJust, fromJust)
 import Debug.Trace
 
+
+-------------------------------------------------
+-- параметры жидкости
+-- TODO: возможно их надо приклеить к миру или к отдельным частицам
+const_k :: Float      -- жёсткость (сжимаемость)
+const_k = 100000.0
+
+const_p_0 :: Float    -- плотность окружающей среды
+const_p_0 = 0.01
+
+const_myu :: Float    -- вязкость
+const_myu = 100000.0
+
+const_sigma :: Float  -- поверхностное натяжение
+const_sigma = 100000.0
+
+const_g :: Float      -- ускорение свободного падения
+const_g = 10.0
+
+const_r :: Float
+const_r = 0.5         -- отражение от границ мира
+-------------------------------------------------
+
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
   , mouse_pos :: (Float, Float)}   -- положение указателя
@@ -34,16 +57,18 @@ data Interface = Button              -- кнопка
   }
   | World                        -- интерактивный симулируемый мир
   { ibase      :: BaseInterface  -- базовая часть
+  , h_smooth   :: Float          -- константа h - длина сглаживания
   , entities   :: [Entity]       -- сущности в игровом мире
   , back_col   :: Color}         -- цвет фона
   deriving Show
 
 data Entity = Particle           -- частица
-  { e_pos :: Point               -- положение в мире
-  , e_speed :: Vector            -- скорость
-  , e_mass :: Float              -- масса
+  { e_pos    :: Point            -- положение в мире
+  , e_speed  :: Vector           -- скорость
+  , e_mass   :: Float            -- масса
+  , e_dense  :: Float            -- плотность, пересчитывается автоматически
   , e_radius :: Float            -- размер частицы (для рисования/столкновений)
-  , e_color :: Color}            -- цвет частицы
+  , e_color  :: Color}           -- цвет частицы
   deriving Show
 
 -------------------------- обработчик событий --------------------------
@@ -66,8 +91,9 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
     new_world = old_world {entities = (new_particle : (entities old_world))}
     old_world = (elems app) !! 0     -- считаем, что мир - нулевой интерфейс приложения
     new_particle = Particle {e_pos = w_pos,
-                             e_speed = (mulSV (-0.5) (2 * w_pos - w_size)),
+                             e_speed = (mulSV (-0.5 * 0.000001) (2 * w_pos - w_size)),
                              e_mass = 1,
+                             e_dense = 1.0, -- само пусть считается
                              e_radius = 5,
                              e_color = black}
     w_place = (place (ibase old_world))
@@ -96,10 +122,11 @@ action_button_click num f app = f (replace_int num new_button app)
 
 
 action_load_world :: String -> Application -> IO Application
-action_load_world filename app = do r_world <- load_world place_ size_ filename
+action_load_world filename app = do r_world <- load_world h_smooth_ place_ size_ filename
                                     return (replace_int 0 r_world app)
                                     where
                                       world = (elems app) !! 0
+                                      h_smooth_ = (h_smooth world)
                                       place_ = (place (ibase world))
                                       size_ = (size (ibase world))
 
@@ -136,8 +163,8 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Entity -> Picture
-draw_entity (Particle (x, y) _ _ r c) = color c (translate x y (circleSolid r))
-draw_entity _ = Blank
+draw_entity (Particle (x, y) _ _ _ r c) = color c (translate x y (circleSolid r))
+--draw_entity _ = Blank
 
 -- нарисовать текст "приблизительно" по центру с "адекватным" размером
 text_ :: String -> Picture
@@ -161,20 +188,113 @@ process_time _ elem_ = elem_
 
 
 process_world :: Float -> Interface -> Interface
-process_world time world = world { entities = (map (process_entity world time) (entities world))}
+process_world time world = tmp_world { entities = (map (process_entity tmp_world time) (entities tmp_world))}
+  where
+    tmp_world = world { entities = (map (refresh_density world) (entities world))}
+
+refresh_density :: Interface -> Entity -> Entity
+refresh_density world ent = ent {e_dense = density world (e_pos ent)}
 
 process_entity :: Interface -> Float -> Entity -> Entity
-process_entity world time (Particle (x, y) (dx, dy) m r c) = Particle (new_x, new_y) (new_dx, new_dy) m r c 
+process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos new_vel m p r c 
 -- что-то может пойти не так, если world не (World ...), а другой интерфейс (Button/Slider)
   where
-    (wx, wy) = (size (ibase world))
-    tmp_x = x + time * dx
-    new_x = if tmp_x < 0 then (-tmp_x) else (if tmp_x > wx then (2 * wx - tmp_x) else tmp_x)
-    tmp_y = y + time * dy
-    new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
-    new_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
-    new_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
-process_entity _ _ e = e
+    --(wx, wy) = (size (ibase world))
+    --tmp_x = x + time * dx
+    --new_x = if tmp_x < 0 then (-tmp_x) else (if tmp_x > wx then (2 * wx - tmp_x) else tmp_x)
+    --tmp_y = y + time * dy
+    --new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
+    --tmp_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
+    --tmp_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
+    (f_x, f_y) = use_force p (vx, vy) world (x, y)
+    tmp_vx = vx + time * (f_x / m)
+    tmp_vy = vy + time * (f_y / m) - const_g * time  -- добавляем ускорение свободного падения
+    (new_pos, new_vel) = (bound_bounce (size (ibase world))
+                          ((x + time * tmp_vx, y + time * tmp_vy), 
+                           (tmp_vx, tmp_vy)))
+-- посчитали силу -> использовали силу -> проехали -> отразились
+--process_entity _ _ e = e
+
+bound_bounce :: Vector -> (Point, Vector) -> (Point, Vector)
+bound_bounce size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_vy))
+  where
+    (wx, wy) = size_
+    new_x = if x < 0 then (-x) else (if x > wx then (2 * wx - x) else x)
+    new_y = if y < 0 then (-y) else (if y > wy then (2 * wy - y) else y)
+    new_vx = if (x < 0 || x > wx) then (-const_r * vx) else vx
+    new_vy = if (y < 0 || y > wy) then (-const_r * vy) else vy
+
+------------------------------- физика ---------------------------------
+------------------------------------------------------------------------
+
+use_force :: Float -> Vector -> Interface -> Point -> Vector
+use_force p_i v_i world pos = ((f_pressure p_i world pos) +
+                           (f_viscosity v_i world pos) + 
+                           (f_tension world pos))
+
+
+density :: Interface -> Point -> Float
+density world pos = sum (map (p_dense (h_smooth world) pos) (entities world)) -- + const_p_0
+
+p_dense :: Float -> Point -> Entity -> Float
+p_dense h c (Particle pos _ m _ _ _) = m * (ker_poly6 (dist pos c) h)
+-- p_dense _ _ _ = 0
+
+
+get_value :: (Entity -> Float) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
+get_value func kernel world pos = sum (map map_f (entities world))
+  where map_f = (\ent -> mulSV ((func ent) * (e_mass ent) / (e_dense ent) *
+                                (kernel (dist pos (e_pos ent)) (h_smooth world))) 
+                         (normalize (pos - (e_pos ent))))
+--get_value _ _ _ _ = 0
+
+get_value_v :: (Entity -> Vector) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
+get_value_v func kernel world pos = sum (map map_f (entities world))
+  where map_f = (\ent -> mulSV ((e_mass ent) / (e_dense ent) *
+                               (kernel (dist pos (e_pos ent)) (h_smooth world))) 
+                         (func ent))
+--get_value_v _ _ _ _ = 0
+
+
+
+f_pressure :: Float -> Interface -> Point -> Vector
+f_pressure p_i world pos = (get_value func ker_nab_poly6 world pos)
+  where func = (\ent -> ((p_i - (e_dense ent)) / 2 - const_p_0) * const_k)
+
+f_viscosity :: Vector -> Interface -> Point -> Vector
+f_viscosity v_i world pos = (get_value_v func ker_nab2_poly6 world pos)
+  where func = (\ent -> mulSV const_myu (v_i - (e_speed ent)))
+
+f_tension :: Interface -> Point -> Vector
+f_tension world pos = (get_value (\_ -> (-const_sigma)) ker_nab2_poly6 world pos)
+
+-- магические ядра --
+ker_poly6 :: Float -> Float -> Float
+ker_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi / (h^9)) * ((h^2 - r^2) ^ 3)
+              | otherwise = 0
+
+ker_nab_poly6 :: Float -> Float -> Float
+ker_nab_poly6 r h | (0 <= r && r <= h) = (-315 / 64 / pi / (h^9)) * (6 * r * ((h^2 - r^2) ^ 2))
+                  | otherwise = 0
+
+ker_nab2_poly6 :: Float -> Float -> Float
+ker_nab2_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi / (h^9)) * (6 * (h^2 - r^2) * (4 * r^2 - (h^2 - r^2)))
+                   | otherwise = 0
+
+ker_density :: Float -> Float -> Float
+ker_density r h | (0 <= r && r <= h) = (1 - r / h) ^ 2
+                | otherwise = 0
+
+------------------------------------------------------------------------
+
+dist :: Point -> Point -> Float
+dist (x1, y1) (x2, y2) = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+
+normalize :: Vector -> Vector
+normalize vec | (magV vec == 0) = vec
+              | otherwise = mulSV (1.0 / magV vec) vec
+
+------------------------------------------------------------------------
 ------------------------------------------------------------------------
 
 -- изменить один элемент интерфейса
@@ -187,8 +307,11 @@ replace_int n new app = app {elems = (take n el) ++ (new : (drop (n + 1) el))}
 -- загрузка состояния мира их файла, принимает путь к файлу
 -- формат файла: описание частицы в отдельной строке
 -- '#' - комментарий
-load_world :: Point -> Vector -> String -> IO Interface
-load_world place_ size_ file = 
+
+--                                 TODO : запихать остальные параметры в файл                
+
+load_world :: Float -> Point -> Vector -> String -> IO Interface
+load_world h_smooth_ place_ size_ file = 
   do file_text <- (readFile file)
      let strings = (filter (\s -> (s /= []) && ((head (head s)) /= '#')) (map words (lines file_text))) ++ [[]]
      return World {ibase = IBase {place = place_, 
@@ -196,6 +319,7 @@ load_world place_ size_ file =
                                   action = action_pain,            ---------------------------------------------------------------------------------------------
                                   draw = draw_world,               ---------------------------------------------------------------------------------------------
                                   process = process_world}         ---------------------------------------------------------------------------------------------
+                  , h_smooth = h_smooth_
                   , entities = (map fromJust (filter isJust (map load_particle (tail strings))))
                   , back_col = load_color_l (head strings)}
 
@@ -205,6 +329,7 @@ load_particle (x_pos : (y_pos : (x_speed : (y_speed : (mass : (rad : col)))))) =
   Just Particle { e_pos = ((read x_pos :: Float), (read y_pos :: Float))
                 , e_speed = ((read x_speed :: Float), (read y_speed :: Float))
                 , e_mass = (read mass :: Float)
+                , e_dense = 1.0 -- всё равно пересчитается
                 , e_radius = (read rad :: Float)
                 , e_color = load_color_l col}
 load_particle _ = Nothing
@@ -227,5 +352,5 @@ write_entities ents = foldr write_next_entity "" ents
 
 -- страшная строчка
 write_next_entity :: Entity -> String -> String
-write_next_entity (Particle (x, y) (vx, vy) m r col) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
-write_next_entity _ buf = buf
+write_next_entity (Particle (x, y) (vx, vy) m _ r col) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
+--write_next_entity _ buf = buf
