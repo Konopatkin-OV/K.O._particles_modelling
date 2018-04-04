@@ -1,8 +1,4 @@
-# project-template
-
-[![Build Status](https://travis-ci.org/cmc-haskell-2018/project-template.svg?branch=master)](https://travis-ci.org/cmc-haskell-2018/project-template)
-
-Шаблон проекта для выполнения практического задания.
+# Particles
 
 ## Сборка и запуск
 
@@ -31,3 +27,16 @@ stack test
 stack ghci
 ```
 
+## Что происходит
+
+при запуске состояние сцены загружается из файла "world.txt"
+
+кнопка "Reload world" - загружает состояние из файла "base_world.txt"
+кнопка "Load world" - загружает состояние из файла "world.txt"
+кнопка "Save world" - записывает состояние в файл "world.txt"
+
+клик внутрь сцены создаёт частицу в точке
+
+
+параметры "жидкости" в начале файла BaseApp.hs
+длина сглаживания - первый параметр функции load_world в файле Particles.hs
