@@ -4,7 +4,7 @@ import BaseApp
 import Graphics.Gloss.Interface.IO.Game
 
 run :: IO ()
-run = do world <- load_world 600 (-450, -50) (600, 400) "world.txt"
+run = do world <- load_world 40 (-450, -50) (600, 400) "world.txt"
          let app = App {elems = [world, button_load, button_save, button_reload], mouse_pos = (0, 0)}
          playIO display white 50 app app_draw app_handle_events app_process 
            where
