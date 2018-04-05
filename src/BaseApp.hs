@@ -11,23 +11,24 @@ import Debug.Trace
 -------------------------------------------------
 -- параметры жидкости
 -- TODO: возможно их надо приклеить к миру или к отдельным частицам
+-- здоровенные числа напрягают
 const_k :: Float      -- жёсткость (сжимаемость)
-const_k = 100000000.0
+const_k = 1.5 * 10000000000.0
 
 const_p_0 :: Float    -- плотность окружающей среды
-const_p_0 = 0.0
+const_p_0 = 0.2
 
 const_myu :: Float    -- вязкость
-const_myu = 1000000.0
+const_myu = 1.0 * 200000000.0
 
 const_sigma :: Float  -- поверхностное натяжение
-const_sigma = 100000000.0
+const_sigma = 1.0 * 2000000000.0
 
 const_g :: Float      -- ускорение свободного падения
-const_g = 100.0
+const_g = 500.0
 
 const_r :: Float
-const_r = 0.5         -- отражение от границ мира
+const_r = 0.2         -- отражение от границ мира
 -------------------------------------------------
 
 data Application = App             -- объект окна с приложением
@@ -94,8 +95,8 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
                              e_speed = (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
                              e_mass = 1,
                              e_dense = 1.0, -- само пусть считается
-                             e_radius = 20,
-                             e_color = black}
+                             e_radius = 30,
+                             e_color = makeColor 0.0 0.0 0.6 1.0}
     w_place = (place (ibase old_world))
     w_size = (size (ibase old_world))
     w_pos = pos - (place (ibase old_world)) -- положение указателя относительно мира
