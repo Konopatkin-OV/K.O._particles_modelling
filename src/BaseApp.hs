@@ -13,19 +13,19 @@ import Debug.Trace
 -- TODO: возможно их надо приклеить к миру или к отдельным частицам
 -- здоровенные числа напрягают
 const_k :: Float      -- жёсткость (сжимаемость)
-const_k = 1.5 * 10000000000.0
+const_k = 1.0 * 3000000000.0
 
 const_p_0 :: Float    -- плотность окружающей среды
-const_p_0 = 0.2
+const_p_0 = 0.0
 
 const_myu :: Float    -- вязкость
-const_myu = 1.0 * 200000000.0
+const_myu = 1.0 * 300000000.0
 
 const_sigma :: Float  -- поверхностное натяжение
-const_sigma = 1.0 * 2000000000.0
+const_sigma = 1.0 * 3000000000.0
 
 const_g :: Float      -- ускорение свободного падения
-const_g = 500.0
+const_g = 0.1 * 500.0
 
 const_r :: Float
 const_r = 0.2         -- отражение от границ мира
@@ -95,7 +95,7 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
                              e_speed = (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
                              e_mass = 1,
                              e_dense = 1.0, -- само пусть считается
-                             e_radius = 30,
+                             e_radius = 20,
                              e_color = makeColor 0.0 0.0 0.6 1.0}
     w_place = (place (ibase old_world))
     w_size = (size (ibase old_world))
@@ -194,7 +194,10 @@ process_world time world = tmp_world { entities = (map (process_entity tmp_world
     tmp_world = world { entities = (map (refresh_density world) (entities world))}
 
 refresh_density :: Interface -> Entity -> Entity
-refresh_density world ent = ent {e_dense = density world (e_pos ent)}
+refresh_density world ent = ent {e_dense = density (get_vicinity r pos world) pos}
+  where
+    r = (e_radius ent)
+    pos = (e_pos ent)
 
 process_entity :: Interface -> Float -> Entity -> Entity
 process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos new_vel m p r c 
@@ -207,7 +210,7 @@ process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos 
     --new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
     --tmp_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
     --tmp_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
-    (f_x, f_y) = use_force p (vx, vy) world (x, y)
+    (f_x, f_y) = use_force p (vx, vy) (get_vicinity r (x, y) world) (x, y)
     tmp_vx = vx + time * (f_x / m)
     tmp_vy = vy + time * (f_y / m) - const_g * time  -- добавляем ускорение свободного падения
     (new_pos, new_vel) = (bound_bounce (size (ibase world))
@@ -220,32 +223,38 @@ bound_bounce :: Vector -> (Point, Vector) -> (Point, Vector)
 bound_bounce size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_vy))
   where
     (wx, wy) = size_
-    new_x = if x < 0 then (-x) else (if x > wx then (2 * wx - x) else x)
-    new_y = if y < 0 then (-y) else (if y > wy then (2 * wy - y) else y)
+    new_x = if x < 0 then (-const_r * x) else (if x > wx then (wx - const_r * (wx - x)) else x)
+    new_y = if y < 0 then (-const_r * y) else (if y > wy then (wy - const_r * (wy - y)) else y)
     new_vx = if (x < 0 || x > wx) then (-const_r * vx) else vx
     new_vy = if (y < 0 || y > wy) then (-const_r * vy) else vy
+
+get_vicinity :: Float -> Point -> Interface -> Interface
+get_vicinity r pos world = world {entities = filter check (entities world)
+                                  } -- TODO: сделать длину сглаживания зависящей от радиуса частицы
+  where
+    check = (\ent -> (dist (e_pos ent) pos) <= r)
 
 ------------------------------- физика ---------------------------------
 ------------------------------------------------------------------------
 
 use_force :: Float -> Vector -> Interface -> Point -> Vector
-use_force p_i v_i world pos = ((f_pressure p_i world pos) +
-                              (f_viscosity v_i world pos) + 
-                              (f_tension world pos))
+use_force p_i v_i world pos = ((mulSV (-const_k) (f_pressure p_i world pos)) +
+                               (mulSV const_myu (f_viscosity v_i world pos)) + 
+                               (mulSV const_sigma (f_tension world pos)))
 
 
 density :: Interface -> Point -> Float
 density world pos = sum (map (p_dense (h_smooth world) pos) (entities world)) -- + const_p_0
 
 p_dense :: Float -> Point -> Entity -> Float
-p_dense h c (Particle pos _ m _ _ _) = if ((dist pos c) > h) then 0.0 else 
+p_dense h c (Particle pos _ m _ _ _) = -- if ((dist pos c) > h) then 0.0 else 
                                        m * (ker_density (dist pos c) h)
 -- p_dense _ _ _ = 0
 
 
 get_value :: (Entity -> Float) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
 get_value func kernel world pos = sum (map map_f (entities world))
-  where map_f = (\ent -> if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
+  where map_f = (\ent -> -- if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
                          (mulSV ((func ent) * (e_mass ent) / (e_dense ent) *
                                 (kernel (dist pos (e_pos ent)) (h_smooth world))) 
                          (normalize (pos - (e_pos ent)))))
@@ -253,7 +262,7 @@ get_value func kernel world pos = sum (map map_f (entities world))
 
 get_value_v :: (Entity -> Vector) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
 get_value_v func kernel world pos = sum (map map_f (entities world))
-  where map_f = (\ent -> if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
+  where map_f = (\ent -> -- if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
                          (mulSV ((e_mass ent) / (e_dense ent) *
                                (kernel (dist pos (e_pos ent)) (h_smooth world))) 
                          (func ent)))
@@ -263,26 +272,27 @@ get_value_v func kernel world pos = sum (map map_f (entities world))
 
 f_pressure :: Float -> Interface -> Point -> Vector
 f_pressure p_i world pos = (get_value func ker_nab_poly6 world pos)
-  where func = (\ent -> ((p_i - (e_dense ent)) / 2 - const_p_0) * const_k)
+  where func = (\ent -> ((p_i + (e_dense ent)) / 2 - const_p_0))
 
 f_viscosity :: Vector -> Interface -> Point -> Vector
 f_viscosity v_i world pos = (get_value_v func ker_nab2_poly6 world pos)
-  where func = (\ent -> mulSV const_myu ((e_speed ent) - v_i))
+  where func = (\ent -> (v_i - (e_speed ent)))
 
 f_tension :: Interface -> Point -> Vector
-f_tension world pos = (get_value (\_ -> (-const_sigma)) ker_nab2_poly6 world pos)
+f_tension world pos = (get_value (\_ -> 1.0) ker_nab2_poly6 world pos)
 
 -- магические ядра --
 ker_poly6 :: Float -> Float -> Float
-ker_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi / (h^9)) * ((h^2 - r^2) ^ 3)
+ker_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi) * ((h^2 - r^2) ^ 3) / (h^9)
               | otherwise = 0
 
 ker_nab_poly6 :: Float -> Float -> Float
-ker_nab_poly6 r h | (0 <= r && r <= h) = (-315 / 64 / pi / (h^9)) * (6 * r * ((h^2 - r^2) ^ 2))
+ker_nab_poly6 r h | (0 <= r && r <= h) = (-315 / 64 / pi) * (6 * r * ((h^2 - r^2) ^ 2)) / (h^9)
                   | otherwise = 0
 
 ker_nab2_poly6 :: Float -> Float -> Float
-ker_nab2_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi / (h^9)) * (6 * (h^2 - r^2) * (4 * r^2 - (h^2 - r^2)))
+ker_nab2_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi) * (6 * (h^2 - r^2) * (7 * r^2 - 3 * h^2)) / (h^9)
+  --(315 / 64 / pi) * (6 * (h^2 - r^2) * (4 * r^2 - (h^2 - r^2))) / (h^9)
                    | otherwise = 0
 
 ker_density :: Float -> Float -> Float
