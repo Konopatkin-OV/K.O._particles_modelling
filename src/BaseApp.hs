@@ -191,8 +191,10 @@ process_time _ elem_ = elem_
 
 
 process_world :: Float -> Interface -> Interface
-process_world time world = tmp_world { entities = (map (process_entity tmp_world time) (entities tmp_world))}
+process_world time world | (not (is_pause world)) = tmp_world { entities = (map (process_entity tmp_world dt) (entities tmp_world))}
+                         | otherwise = world
   where
+    dt = (time * (time_speed world))
     tmp_world = world { entities = (map (refresh_density world) (entities world))}
 
 refresh_density :: Interface -> Entity -> Entity
@@ -248,7 +250,10 @@ load_world h_smooth_ place_ size_ file =
                                   process = process_world}         ---------------------------------------------------------------------------------------------
                   , h_smooth = h_smooth_
                   , entities = (map fromJust (filter isJust (map load_particle (tail strings))))
-                  , back_col = load_color_l (head strings)}
+                  , back_col = load_color_l (head strings)
+                  , time_speed = 1.0
+                  , is_pause = True
+                  , constants = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]} -- костылик
 
 
 load_particle :: [String] -> Maybe Entity
