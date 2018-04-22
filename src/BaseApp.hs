@@ -7,70 +7,8 @@ import Data.List (intercalate)
 import Data.Maybe (isJust, fromJust)
 import Debug.Trace
 
-
--------------------------------------------------
--- параметры жидкости
--- TODO: возможно их надо приклеить к миру или к отдельным частицам
--- здоровенные числа напрягают
-const_k :: Float      -- жёсткость (сжимаемость)
-const_k = 1.0 * 3000000000.0
-
-const_p_0 :: Float    -- плотность окружающей среды
-const_p_0 = 0.0
-
-const_myu :: Float    -- вязкость
-const_myu = 1.0 * 300000000.0
-
-const_sigma :: Float  -- поверхностное натяжение
-const_sigma = 1.0 * 3000000000.0
-
-const_g :: Float      -- ускорение свободного падения
-const_g = 0.1 * 500.0
-
-const_r :: Float
-const_r = 0.2         -- отражение от границ мира
--------------------------------------------------
-
-data Application = App             -- объект окна с приложением
-  { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
-  , mouse_pos :: (Float, Float)}   -- положение указателя
-  deriving Show
-
--- "базовая часть" элементов интерфейса
--- считаем, что элемент интерфейса - прямоугольник, параллельный осям координат, в который можно кликать мышью
-data BaseInterface = IBase
-  { place   :: Point                                      -- положение в окне (левый нижний угол)
-  , size    :: Vector                                     -- направление на правый верхний угол прямоугольника
-  , action  :: (Event -> Application -> IO Application)   -- действие при активации
-  , draw    :: (Interface -> Picture)                     -- функция отрисовки
-  , process :: (Float -> Interface -> Interface)}         -- функция обработки времени
-
-instance Show BaseInterface where
-    show (IBase p s _ _ _) = show ("IBase: ", p, s)
-
-data Interface = Button              -- кнопка
-  { ibase       :: BaseInterface     -- базовая часть
-  , b_text      :: String            -- надпись на кнопке
-  , b_col       :: Color             -- цвет кнопки
-  , b_click_col :: Color             -- цвет после клика
-  , b_text_col  :: Color             -- цвет текста
-  , b_time      :: Float             -- время после последнего клика
-  }
-  | World                        -- интерактивный симулируемый мир
-  { ibase      :: BaseInterface  -- базовая часть
-  , h_smooth   :: Float          -- константа h - длина сглаживания
-  , entities   :: [Entity]       -- сущности в игровом мире
-  , back_col   :: Color}         -- цвет фона
-  deriving Show
-
-data Entity = Particle           -- частица
-  { e_pos    :: Point            -- положение в мире
-  , e_speed  :: Vector           -- скорость
-  , e_mass   :: Float            -- масса
-  , e_dense  :: Float            -- плотность, пересчитывается автоматически
-  , e_radius :: Float            -- размер частицы (для рисования/столкновений)
-  , e_color  :: Color}           -- цвет частицы
-  deriving Show
+import BaseClasses
+import Physics
 
 -------------------------- обработчик событий --------------------------
 app_handle_events :: Event -> Application -> IO Application
@@ -83,6 +21,14 @@ elem_action event element app = do cur_app <- app
 action_none :: Event -> Application -> IO Application
 action_none _ app = return app
 
+-- запихнуть несколько действий в одно
+action_multi :: [(Event -> Application -> IO Application)] -> Event -> Application -> IO Application
+action_multi acts event app = (foldr do_action (return app) (map (\a -> (a event)) acts))
+-- кажется, где-то уже была композиция списка функций, но проще написать ещё раз
+do_action :: (Application -> IO Application) -> IO Application -> IO Application
+do_action func app = do cur_app <- app
+                        func cur_app
+
 
 -- клик по миру: создаёт новую частицу в точке клика, которая летит в центр мира
 action_pain :: Event -> Application -> IO Application
@@ -92,7 +38,7 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
     new_world = old_world {entities = (new_particle : (entities old_world))}
     old_world = (elems app) !! 0     -- считаем, что мир - нулевой интерфейс приложения
     new_particle = Particle {e_pos = w_pos,
-                             e_speed = (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
+                             e_speed = (0, 0), -- (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
                              e_mass = 1,
                              e_dense = 1.0, -- само пусть считается
                              e_radius = 20,
@@ -104,13 +50,17 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
     --wy = (snd (size (ibase old_world))) / 2
 action_pain _ app = return app
 
--- клик по элементу интерфейса
-action_click :: BaseInterface -> (Application -> IO Application) -> Event -> Application -> IO Application
-action_click base f (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos ld_corner ru_corner = f app
-                                                                              | otherwise = return app
+-- проверка попадания точки в интерфейс
+check_pos :: BaseInterface -> Point -> Bool
+check_pos base pos = pointInBox pos ld_corner ru_corner
   where
     ld_corner = (place base)
     ru_corner = ld_corner + (size base)
+
+-- клик по элементу интерфейса
+action_click :: BaseInterface -> (Application -> IO Application) -> Event -> Application -> IO Application
+action_click base f (EventKey (MouseButton LeftButton) Down _ pos) app | check_pos base pos = f app
+                                                                       | otherwise = return app
 action_click _ _ _ app = return app
 
 
@@ -120,6 +70,35 @@ action_button_click num f app = f (replace_int num new_button app)
   where
     old_button = (elems app) !! num
     new_button = old_button {b_time = 0.0}
+
+
+-- взаимодействие со слайдером
+action_slider :: Int -> Event -> Application -> IO Application
+action_slider num (EventKey (MouseButton LeftButton) Down _ pos) app | check_pos base pos = set_slider_pos num pos app
+                                                                     | otherwise = return app
+  where
+    base = (ibase ((elems app) !! num))
+action_slider num (EventMotion pos) app | (s_m_act ((elems app) !! num)) = set_slider_pos num pos app
+action_slider num (EventKey (MouseButton LeftButton) Up _ _) app = return (replace_int num new_sl app)
+  where
+    new_sl = ((elems app) !! num) {s_m_act = False}
+action_slider _ _ app = return app
+
+set_slider_pos :: Int -> Point -> Application -> IO Application
+set_slider_pos num pos app = return (replace_int num new_sl app)
+  where
+    old_sl = ((elems app) !! num)
+    new_sl = old_sl {s_curpt = new_curpt, s_m_act = True}
+    new_curpt = get_sl_pt old_sl pos
+
+-- вычислить номер деления слайдера по клику
+get_sl_pt :: Interface -> Point -> Int
+get_sl_pt sl pos = (max 0 (min ((s_pts sl) - 1) (round (x / d_pt))))
+  where 
+    x = (fst pos) - (fst (place (ibase sl)))
+    (sx, _) = (size (ibase sl))
+    (dx, _) = (s_indent sl)
+    d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
 
 
 action_load_world :: String -> Application -> IO Application
@@ -149,11 +128,32 @@ draw_none _ = Blank
 draw_button :: Interface -> Picture
 draw_button button = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (rectangleSolid sx sy),
                                               color (b_col button) (rectangleSolid (sx - 6) (sy - 6)),
-                                              color (b_text_col button) (text_ (b_text button))])
+                                              color (b_text_col button) (text_ 0.2 (b_text button))])
   where
     (x, y) = (place (ibase button))
     (sx, sy) = (size (ibase button))
     cur_col = if (b_time button) < 0.4 then (b_click_col button) else black
+
+draw_text_field :: Interface -> Picture
+draw_text_field tf = translate (x + sx / 2) (y + sy / 2) 
+                     (color (t_col tf) (text_ (t_scale tf) (t_text tf)))
+  where
+    (x, y) = (place (ibase tf))
+    (sx, sy) = (size (ibase tf))
+
+draw_slider :: Interface -> Picture
+draw_slider sl = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (rectangleSolid sx sy),
+                                  color (s_col sl) (rectangleSolid (sx - 2 * dx) (sy - 2 * dy)),
+                                  color (s_sl_col sl) (translate (-sx / 2 + sl_pos) 0
+                                                  (rectangleSolid (s_sl_size sl) (sy - 2 * dy)))])
+  where
+    (x, y) = (place (ibase sl))
+    (sx, sy) = (size (ibase sl))
+    (dx, dy) = (s_indent sl)
+    sl_pos = dx + (fromIntegral (s_curpt sl)) * d_pt
+    d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
+    cur_col = black
+
 
 draw_world :: Interface -> Picture
 draw_world world = translate x y (pictures [color (back_col world) (polygon [(0, 0), (0, sy), (sx, sy), (sx, 0)]),
@@ -164,12 +164,14 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Entity -> Picture
-draw_entity (Particle (x, y) _ _ _ r c) = color c (translate x y (circleSolid r))
+draw_entity (Particle (x, y) _ _ _ r c) = pictures [color c (translate x y (circleSolid r)),
+                                                    color (withAlpha 0.025 c) (translate x y (circleSolid 60))]
+                                          -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
 
--- нарисовать текст "приблизительно" по центру с "адекватным" размером
-text_ :: String -> Picture
-text_ txt = translate (-7 * fromIntegral (length txt)) (-10) (scale 0.2 0.2 (text txt))
+-- нарисовать текст "приблизительно" по центру с масштабом s
+text_ :: Float -> String -> Picture
+text_ s txt = translate (-35 * s * fromIntegral (length txt)) (-50 * s) (scale s s (text txt))
 ------------------------------------------------------------------------
 
 -------------------------- обработчик времени --------------------------
@@ -196,7 +198,8 @@ process_world time world = tmp_world { entities = (map (process_entity tmp_world
 refresh_density :: Interface -> Entity -> Entity
 refresh_density world ent = ent {e_dense = density (get_vicinity r pos world) pos}
   where
-    r = (e_radius ent)
+    -- покойся с миром, идиотский баг: "r = (e_radius ent)"
+    r = (h_smooth world)
     pos = (e_pos ent)
 
 process_entity :: Interface -> Float -> Entity -> Entity
@@ -210,7 +213,7 @@ process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos 
     --new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
     --tmp_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
     --tmp_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
-    (f_x, f_y) = use_force p (vx, vy) (get_vicinity r (x, y) world) (x, y)
+    (f_x, f_y) = use_force p (vx, vy) (get_vicinity (h_smooth world) (x, y) world) (x, y)  -- и здесь был r вместо h
     tmp_vx = vx + time * (f_x / m)
     tmp_vy = vy + time * (f_y / m) - const_g * time  -- добавляем ускорение свободного падения
     (new_pos, new_vel) = (bound_bounce (size (ibase world))
@@ -219,96 +222,6 @@ process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos 
 -- посчитали силу -> использовали силу -> проехали -> отразились
 --process_entity _ _ e = e
 
-bound_bounce :: Vector -> (Point, Vector) -> (Point, Vector)
-bound_bounce size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_vy))
-  where
-    (wx, wy) = size_
-    new_x = if x < 0 then (-const_r * x) else (if x > wx then (wx - const_r * (wx - x)) else x)
-    new_y = if y < 0 then (-const_r * y) else (if y > wy then (wy - const_r * (wy - y)) else y)
-    new_vx = if (x < 0 || x > wx) then (-const_r * vx) else vx
-    new_vy = if (y < 0 || y > wy) then (-const_r * vy) else vy
-
-get_vicinity :: Float -> Point -> Interface -> Interface
-get_vicinity r pos world = world {entities = filter check (entities world)
-                                  } -- TODO: сделать длину сглаживания зависящей от радиуса частицы
-  where
-    check = (\ent -> (dist (e_pos ent) pos) <= r)
-
-------------------------------- физика ---------------------------------
-------------------------------------------------------------------------
-
-use_force :: Float -> Vector -> Interface -> Point -> Vector
-use_force p_i v_i world pos = ((mulSV (-const_k) (f_pressure p_i world pos)) +
-                               (mulSV const_myu (f_viscosity v_i world pos)) + 
-                               (mulSV const_sigma (f_tension world pos)))
-
-
-density :: Interface -> Point -> Float
-density world pos = sum (map (p_dense (h_smooth world) pos) (entities world)) -- + const_p_0
-
-p_dense :: Float -> Point -> Entity -> Float
-p_dense h c (Particle pos _ m _ _ _) = -- if ((dist pos c) > h) then 0.0 else 
-                                       m * (ker_density (dist pos c) h)
--- p_dense _ _ _ = 0
-
-
-get_value :: (Entity -> Float) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
-get_value func kernel world pos = sum (map map_f (entities world))
-  where map_f = (\ent -> -- if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
-                         (mulSV ((func ent) * (e_mass ent) / (e_dense ent) *
-                                (kernel (dist pos (e_pos ent)) (h_smooth world))) 
-                         (normalize (pos - (e_pos ent)))))
---get_value _ _ _ _ = 0
-
-get_value_v :: (Entity -> Vector) -> (Float -> Float -> Float) -> Interface -> Point -> Vector
-get_value_v func kernel world pos = sum (map map_f (entities world))
-  where map_f = (\ent -> -- if ((dist pos (e_pos ent)) > (h_smooth world)) then (0.0, 0.0) else 
-                         (mulSV ((e_mass ent) / (e_dense ent) *
-                               (kernel (dist pos (e_pos ent)) (h_smooth world))) 
-                         (func ent)))
---get_value_v _ _ _ _ = 0
-
-
-
-f_pressure :: Float -> Interface -> Point -> Vector
-f_pressure p_i world pos = (get_value func ker_nab_poly6 world pos)
-  where func = (\ent -> ((p_i + (e_dense ent)) / 2 - const_p_0))
-
-f_viscosity :: Vector -> Interface -> Point -> Vector
-f_viscosity v_i world pos = (get_value_v func ker_nab2_poly6 world pos)
-  where func = (\ent -> (v_i - (e_speed ent)))
-
-f_tension :: Interface -> Point -> Vector
-f_tension world pos = (get_value (\_ -> 1.0) ker_nab2_poly6 world pos)
-
--- магические ядра --
-ker_poly6 :: Float -> Float -> Float
-ker_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi) * ((h^2 - r^2) ^ 3) / (h^9)
-              | otherwise = 0
-
-ker_nab_poly6 :: Float -> Float -> Float
-ker_nab_poly6 r h | (0 <= r && r <= h) = (-315 / 64 / pi) * (6 * r * ((h^2 - r^2) ^ 2)) / (h^9)
-                  | otherwise = 0
-
-ker_nab2_poly6 :: Float -> Float -> Float
-ker_nab2_poly6 r h | (0 <= r && r <= h) = (315 / 64 / pi) * (6 * (h^2 - r^2) * (7 * r^2 - 3 * h^2)) / (h^9)
-  --(315 / 64 / pi) * (6 * (h^2 - r^2) * (4 * r^2 - (h^2 - r^2))) / (h^9)
-                   | otherwise = 0
-
-ker_density :: Float -> Float -> Float
-ker_density r h | (0 <= r && r <= h) = (1 - r / h) ^ 2
-                | otherwise = 0
-
-------------------------------------------------------------------------
-
-dist :: Point -> Point -> Float
-dist (x1, y1) (x2, y2) = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-
-normalize :: Vector -> Vector
-normalize vec | (magV vec == 0) = vec
-              | otherwise = mulSV (1.0 / magV vec) vec
-
-------------------------------------------------------------------------
 ------------------------------------------------------------------------
 
 -- изменить один элемент интерфейса
