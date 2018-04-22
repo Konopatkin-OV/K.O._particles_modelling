@@ -1,5 +1,5 @@
 name:                particles
-version:             0.2
+version:             0.3
 -- synopsis:
 -- description:
 -- homepage:
@@ -17,6 +17,9 @@ library
   ghc-options:         -Wall -fno-warn-type-defaults
   exposed-modules:     BaseApp
                      , Particles
+                     , Physics
+                     , BaseClasses
+                     , AppFuncs
   build-depends:       base >= 4.7 && < 5
                      , gloss
   default-language:    Haskell2010
