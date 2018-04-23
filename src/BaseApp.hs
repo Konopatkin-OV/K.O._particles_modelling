@@ -6,6 +6,7 @@ import Graphics.Gloss.Interface.IO.Game
 import Data.List (intercalate)
 import Data.Maybe (isJust, fromJust)
 import Debug.Trace
+import Text.Read (readMaybe)
 
 import BaseClasses
 import Physics
@@ -218,9 +219,11 @@ process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos 
     (f_x, f_y) = use_force p (vx, vy) (get_vicinity (h_smooth world) (x, y) world) (x, y)  -- и здесь был r вместо h
     tmp_vx = vx + time * (f_x / m)
     tmp_vy = vy + time * (f_y / m) - const_g * time  -- добавляем ускорение свободного падения
-    (new_pos, new_vel) = (bound_bounce (size (ibase world))
+    (new_pos, new_vel) = (bound_bounce r const_r (size (ibase world))
                           ((x + time * tmp_vx, y + time * tmp_vy), 
                            (tmp_vx, tmp_vy)))
+    const_g = (constants world) !! 4
+    const_r = (constants world) !! 5
 -- посчитали силу -> использовали силу -> проехали -> отразились
 --process_entity _ _ e = e
 
@@ -249,11 +252,11 @@ load_world h_smooth_ place_ size_ file =
                                   draw = draw_world,               ---------------------------------------------------------------------------------------------
                                   process = process_world}         ---------------------------------------------------------------------------------------------
                   , h_smooth = h_smooth_
-                  , entities = (map fromJust (filter isJust (map load_particle (tail strings))))
+                  , entities = (map fromJust (filter isJust (map load_particle (tail (tail strings)))))
                   , back_col = load_color_l (head strings)
                   , time_speed = 1.0
                   , is_pause = True
-                  , constants = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]} -- костылик
+                  , constants = load_const (strings !! 1)} -- костылик
 
 
 load_particle :: [String] -> Maybe Entity
@@ -271,13 +274,22 @@ load_color_l (col_r : (col_g : (col_b : (col_a : _)))) = makeColor (read col_r :
                                                                    (read col_b :: Float) (read col_a :: Float)
 load_color_l _ = black
 
+load_const :: [String] -> [Float]
+load_const consts = if (length res) == 6 then res else base_consts
+  where
+    res = (map fromJust (filter isJust 
+          (map (readMaybe :: String -> Maybe Float) consts)))
 
--- сохранение мира в файл
+
+-- -с-п-а-с-е-н-и-е- сохранение мира в файл
 save_world :: Interface -> String -> IO ()
-save_world world file = writeFile file ((write_color (back_col world)) ++ (write_entities (entities world)))
+save_world world file = writeFile file ((write_color (back_col world)) ++ (write_f_list (constants world)) ++ (write_entities (entities world)))
 
 write_color :: Color -> String
 write_color col = drop 5 (show col)
+
+write_f_list :: [Float] -> String
+write_f_list list = foldr (++) "" (map show list)
 
 write_entities :: [Entity] -> String
 write_entities ents = foldr write_next_entity "" ents

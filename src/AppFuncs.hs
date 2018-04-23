@@ -20,8 +20,8 @@ action_change_text num f _ app = return (replace_int num new_text_field app)
     old_text_field = ((elems app) !! num)
     new_text_field = old_text_field {t_text = (f app)}
 
-slider_to_text :: Int -> String -> Application -> String
-slider_to_text num fmt app = printf fmt (s_value sl)
+slider_to_text :: Int -> (Float -> Float) -> String -> Application -> String
+slider_to_text num func fmt app = printf fmt (func (s_value sl))
   where
     sl = ((elems app) !! num)
 
@@ -49,3 +49,16 @@ action_set_world_time_speed :: (Application -> Float) -> Event -> Application ->
 action_set_world_time_speed f _ app = return (replace_int 0 new_world app)
   where
     new_world = ((elems app) !! 0) {time_speed = f app}
+
+action_set_world_const :: Int -> (Application -> Float) -> Event -> Application -> IO Application
+action_set_world_const num f _ app = return (replace_int 0 new_world app)
+  where
+    world = ((elems app) !! 0)
+    new_world = (world {constants = new_consts})
+    consts = (constants world)
+    new_consts = replace_elem num (f app) consts
+
+-- может ещё где-нибудь пригодится, из встроенных есть модуль lens со стрёмным синтаксисом
+replace_elem :: Int -> a -> [a] -> [a]
+replace_elem n x list | (length list > n) = (take n list) ++ (x : (drop (n + 1) list))
+                      | otherwise = list

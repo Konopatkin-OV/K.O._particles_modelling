@@ -7,35 +7,39 @@ import BaseClasses
 
 -------------------------------------------------
 -- параметры жидкости
--- TODO: возможно их надо приклеить к миру или к отдельным частицам
+-- TODO: возможно приклеить к отдельным частицам
 -- здоровенные числа напрягают
-const_k :: Float      -- жёсткость (сжимаемость)
-const_k = 5.0 * 1000000000.0
 
-const_p_0 :: Float    -- плотность окружающей среды
-const_p_0 = 0.0
+base_consts :: [Float]
+base_consts = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+--const_k :: Float      -- жёсткость (сжимаемость)       :: constants[0]
+--const_k = 5.0 * 1000000000.0
 
-const_myu :: Float    -- вязкость
-const_myu = 0.0 * 500000000.0
+--const_p_0 :: Float    -- плотность окружающей среды    :: constants[1]
+--const_p_0 = 0.0
 
-const_sigma :: Float  -- поверхностное натяжение
-const_sigma = 4.0 * 100000000.0
+--const_myu :: Float    -- вязкость                      :: constants[2]
+--const_myu = 0.0 * 500000000.0
 
-const_g :: Float      -- ускорение свободного падения
-const_g = 0.3 * 500.0
+--const_sigma :: Float  -- поверхностное натяжение       :: constants[3]
+--const_sigma = 4.0 * 100000000.0
 
-const_r :: Float
-const_r = 0.1         -- отражение от границ мира
+--const_g :: Float      -- ускорение свободного падения  :: constants[4]
+--const_g = 0.3 * 500.0
+
+--const_r :: Float      -- отражение от границ мира      :: constants[5]
+--const_r = 0.1         
 -------------------------------------------------
 
-bound_bounce :: Vector -> (Point, Vector) -> (Point, Vector)
-bound_bounce size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_vy))
+-- размер частицы -> константа отражения -> размер мира -> (позиция, скорость)
+bound_bounce :: Float -> Float -> Vector -> (Point, Vector) -> (Point, Vector)
+bound_bounce r const_r size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_vy))
   where
     (wx, wy) = size_
-    new_x = if x < 0 then (-const_r * x) else (if x > wx then (wx - const_r * (wx - x)) else x)
-    new_y = if y < 0 then (-const_r * y) else (if y > wy then (wy - const_r * (wy - y)) else y)
-    new_vx = if (x < 0 || x > wx) then (-const_r * vx) else vx
-    new_vy = if (y < 0 || y > wy) then (-const_r * vy) else vy
+    new_x = if x - r < 0 then (r + const_r * (r - x)) else (if x + r > wx then (wx - r - const_r * (x + r - wx)) else x)
+    new_y = if y - r < 0 then (r + const_r * (r - y)) else (if y + r > wy then (wy - r - const_r * (y + r - wy)) else y)
+    new_vx = if (x - r < 0 || x + r > wx) then (-const_r * vx) else vx
+    new_vy = if (y - r < 0 || y + r > wy) then (-const_r * vy) else vy
 
 get_vicinity :: Float -> Point -> Interface -> Interface
 get_vicinity r pos world = world {entities = filter check (entities world)
@@ -50,6 +54,11 @@ use_force :: Float -> Vector -> Interface -> Point -> Vector
 use_force p_i v_i world pos = ((mulSV const_k (f_pressure p_i world pos)) +
                                (mulSV const_myu (f_viscosity v_i world pos)) + 
                                (mulSV const_sigma (f_tension world pos)))
+  where
+    c = (constants world)
+    const_k     = c !! 0
+    const_myu   = c !! 2
+    const_sigma = c !! 3
 
 
 density :: Interface -> Point -> Float
@@ -81,14 +90,16 @@ get_value_v func kernel world pos = sum (map map_f (entities world))
 
 f_pressure :: Float -> Interface -> Point -> Vector
 f_pressure p_i world pos = (get_value func ker_nab_poly6 world pos)
-  where func = (\ent -> ((p_i + (e_dense ent)) / 2 - const_p_0))
+  where 
+    func = (\ent -> ((p_i + (e_dense ent)) / 2 - const_p_0))
+    const_p_0 = (constants world) !! 1
 
 f_viscosity :: Vector -> Interface -> Point -> Vector
 f_viscosity v_i world pos = (get_value_v func ker_nab2_poly6 world pos)
   where func = (\ent -> ((e_speed ent) - v_i))
 
 f_tension :: Interface -> Point -> Vector
-f_tension world pos = (get_value (\_ -> 1.0) ker_poly6 world pos)
+f_tension world pos = (get_value (\_ -> 1.0) ker_nab2_poly6 world pos)
 
 -- магические ядра --
 -- здесь мог бы быть поясняющий комментарий, но я не шарю >_< --
