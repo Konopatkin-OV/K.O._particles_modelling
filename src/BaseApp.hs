@@ -96,7 +96,7 @@ set_slider_pos num pos app = return (replace_int num new_sl app)
 get_sl_pt :: Interface -> Point -> Int
 get_sl_pt sl pos = (max 0 (min ((s_pts sl) - 1) (round (x / d_pt))))
   where 
-    x = (fst pos) - (fst (place (ibase sl)))
+    x = (fst pos) - (fst (place (ibase sl))) - dx
     (sx, _) = (size (ibase sl))
     (dx, _) = (s_indent sl)
     d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
@@ -166,7 +166,7 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Entity -> Picture
 draw_entity (Particle (x, y) _ _ _ r c) = pictures [color c (translate x y (circleSolid r)),
-                                                    color (withAlpha 0.025 c) (translate x y (circleSolid 60))]
+                                                    color (withAlpha 0.05 c) (translate x y (circleSolid 40))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
 

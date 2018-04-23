@@ -6,7 +6,7 @@ import BaseClasses
 import Graphics.Gloss.Interface.IO.Game
 
 run :: IO ()
-run = do world <- load_world 60 (-350, -380) (400, 780) "world.txt"
+run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
          let app = App {elems = [world, button_load, button_save, button_reload, 
                                  text_field_time, slider_time, button_go, button_pause,
                                  text_field_const_k, slider_const_k, text_field_const_p_0, slider_const_p_0,
@@ -157,7 +157,7 @@ run = do world <- load_world 60 (-350, -380) (400, 780) "world.txt"
                                           s_min = 0,
                                           s_max = 50,
                                           s_pts = 51,
-                                          s_curpt = 10,
+                                          s_curpt = 5,
                                           s_col = (makeColor 0.5 0.5 0.5 1.0),
                                           s_sl_size = 10,
                                           s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
@@ -194,7 +194,7 @@ run = do world <- load_world 60 (-350, -380) (400, 780) "world.txt"
                                  size = (250, 30),
                                  action = action_multi [(action_change_text 12 (slider_to_text 13 (* 0.1) "Viscosity: %.1f")),
                                                         (action_slider 13),
-                                                        (action_set_world_const 2 ((* 10000000) . (get_slider_val 13)))],
+                                                        (action_set_world_const 2 ((* 3000000) . (get_slider_val 13)))],
                                  draw = draw_slider,
                                  process = process_none}
 ----------------------------------------------------------------------------------
@@ -222,7 +222,7 @@ run = do world <- load_world 60 (-350, -380) (400, 780) "world.txt"
                                  size = (250, 30),
                                  action = action_multi [(action_change_text 14 (slider_to_text 15 (* 0.1) "Tension: %.1f")),
                                                         (action_slider 15),
-                                                        (action_set_world_const 3 ((* 50000000) . (get_slider_val 15)))],
+                                                        (action_set_world_const 3 ((* 100000000) . (get_slider_val 15)))],
                                  draw = draw_slider,
                                  process = process_none}
 ----------------------------------------------------------------------------------
