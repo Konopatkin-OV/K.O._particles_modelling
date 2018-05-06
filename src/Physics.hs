@@ -33,30 +33,33 @@ base_consts = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 -------------------------------------------------
 
 -- быстрее + неадекватнее
-max_vic :: Int
-max_vic = 10
+-- max_vic :: Int
+-- max_vic = 1000
+
+-- минимальная диагональ клетки дерева относитально длины сглаживания
+const_tree_size :: Float
+const_tree_size = 0.1
 
 -- дерево квадрантов для поиска соседей частиц
 -- порядок квадрантов: верхний левый, верхный правый, 
 --                     нижний левый,  нижний правый
-data QuadTree = QNode QuadTree QuadTree QuadTree QuadTree | QLeaf [Entity]
+data QuadTree = QNode QuadTree QuadTree QuadTree QuadTree | QLeaf Entity | QEmpty
 
 -- принимает левый нижний угол дерева и верхний правый угол дерева, расстояние сглаживания,
 -- новую частицу и дерево, в которое она добавляется
-qtr_insert :: (Point, Point) -> Float -> Entity -> QuadTree -> QuadTree
-qtr_insert _ _ p_new (QLeaf []) = (QLeaf [p_new])
-qtr_insert coords h p_new (QLeaf p) = new_tree
+qtr_insert :: (Point, Point) -> Entity -> QuadTree -> QuadTree
+qtr_insert _ p_new QEmpty = (QLeaf p_new)
+qtr_insert coords p_new (QLeaf p) = new_tree
   where
     ((x_l, y_d), (x_r, y_u)) = coords
     x_m = (x_l + x_r) / 2
     y_m = (y_d + y_u) / 2
-    new_tree = if (dist (x_l, y_d) (x_r, y_u)) < h 
-               then (QLeaf (p_new : p))
-               else split_tree
-    split_tree = QNode ul ur dl dr
- -- по задумке если диагональ прямоугольника больше h, 
- -- то в нём могла оказаться только одна частица
-    old_pos = (e_pos (head p))
+    --new_tree = if (dist (x_l, y_d) (x_r, y_u)) < h 
+               --then (QLeaf (p_new : p))
+               --else split_tree
+    new_tree = QNode ul ur dl dr
+
+    old_pos = (e_pos p)
     new_pos = (e_pos p_new)
     -- нашли квадрант со старой точкой
     ul_rect = ((x_l, y_m), (x_m, y_u))
@@ -64,24 +67,24 @@ qtr_insert coords h p_new (QLeaf p) = new_tree
     dl_rect = ((x_l, y_d), (x_m, y_m))
     dr_rect = ((x_m, y_d), (x_r, y_m))
 
-    ul_0 = if (pointInRect ul_rect old_pos) then p else []
-    ur_0 = if (pointInRect ur_rect old_pos) then p else []
-    dl_0 = if (pointInRect dl_rect old_pos) then p else []
-    dr_0 = if (pointInRect dr_rect old_pos) then p else []
+    ul_0 = if (pointInRect ul_rect old_pos) then (QLeaf p) else QEmpty
+    ur_0 = if (pointInRect ur_rect old_pos) then (QLeaf p) else QEmpty
+    dl_0 = if (pointInRect dl_rect old_pos) then (QLeaf p) else QEmpty
+    dr_0 = if (pointInRect dr_rect old_pos) then (QLeaf p) else QEmpty
     -- рекурсивно добавляем новую точку
     ul = if (pointInRect ul_rect new_pos) 
-    then qtr_insert ul_rect h p_new (QLeaf ul_0) else (QLeaf ul_0)
+    then qtr_insert ul_rect p_new ul_0 else ul_0
 
     ur = if (pointInRect ur_rect new_pos)
-    then qtr_insert ur_rect h p_new (QLeaf ur_0) else (QLeaf ur_0)
+    then qtr_insert ur_rect p_new ur_0 else ur_0
 
     dl = if (pointInRect dl_rect new_pos)
-    then qtr_insert dl_rect h p_new (QLeaf dl_0) else (QLeaf dl_0)
+    then qtr_insert dl_rect p_new dl_0 else dl_0
 
     dr = if (pointInRect dr_rect new_pos)
-    then qtr_insert dr_rect h p_new (QLeaf dr_0) else (QLeaf dr_0)
+    then qtr_insert dr_rect p_new dr_0 else dr_0
 
-qtr_insert coords h p_new (QNode ul ur dl dr) = new_tree 
+qtr_insert coords p_new (QNode ul ur dl dr) = new_tree 
   where
     ((x_l, y_d), (x_r, y_u)) = coords
     x_m = (x_l + x_r) / 2
@@ -98,47 +101,44 @@ qtr_insert coords h p_new (QNode ul ur dl dr) = new_tree
                 if (pointInRect dl_rect pos) then (QNode ul ur upd_dl dr) else (
                 if (pointInRect dr_rect pos) then (QNode ul ur dl upd_dr) else 
                 (QNode ul ur dl dr))))
-    upd_ul = (qtr_insert ul_rect h p_new ul)
-    upd_ur = (qtr_insert ur_rect h p_new ur)
-    upd_dl = (qtr_insert dl_rect h p_new dl)
-    upd_dr = (qtr_insert dr_rect h p_new dr)
+    upd_ul = (qtr_insert ul_rect p_new ul)
+    upd_ur = (qtr_insert ur_rect p_new ur)
+    upd_dl = (qtr_insert dl_rect p_new dl)
+    upd_dr = (qtr_insert dr_rect p_new dr)
 
 
 -- получить список из всех частиц в дереве
-qtr_get_all :: QuadTree -> [Entity]
-qtr_get_all (QLeaf p) = p
-qtr_get_all (QNode ul ur dl dr) = (qtr_get_all ul) ++
-                                  (qtr_get_all ur) ++
-                                  (qtr_get_all dl) ++
-                                  (qtr_get_all dr)
+qtr_get_all :: QuadTree -> [Entity] -> [Entity]
+qtr_get_all QEmpty res = res
+qtr_get_all (QLeaf p) res = (p : res)
+qtr_get_all (QNode ul ur dl dr) res = (qtr_get_all ul
+                                      (qtr_get_all ur
+                                      (qtr_get_all dl
+                                      (qtr_get_all dr res))))
 
 -- принимает левый нижний угол дерева и верхний правый угол дерева, дерево, расстояние сглаживания,
 -- и точку, окрестность которой нужно найти
-qtr_get_vicinity :: (Point, Point) -> QuadTree -> Float -> Point -> [Entity]
-qtr_get_vicinity _ (QLeaf []) _ _ = []
-qtr_get_vicinity coords (QLeaf p) h pos | d_min < 0.0 = trace "min < 0.0\n" []
-                                        | d_max < 0.0 = trace "max < 0.0\n" p
-                                        | d_max < d_min = trace "max < min\n" []
-                                        | d_max < h = p
-                                        | d_min > h = []
-                                        | otherwise = res
-  where
-    (d_min, d_max) = distToRect coords pos
-    res = take max_vic (filter (\ent -> (dist (e_pos ent) pos) <= h) p)
+qtr_get_vicinity :: (Point, Point) -> QuadTree -> Float -> [Entity] -> Point -> [Entity]
+qtr_get_vicinity _ QEmpty _ res _ = res
+qtr_get_vicinity coords (QLeaf p) h res pos | dist pos (e_pos p) < h = (p : res)
+                                            | otherwise = res
 
-qtr_get_vicinity coords (QNode ul ur dl dr) h pos | d_min > h = []
-                                                  | d_max < h = qtr_get_all (QNode ul ur dl dr)
-                                                  | otherwise = res
+qtr_get_vicinity coords (QNode ul ur dl dr) h res pos | d_min > h = res
+                                                      | d_max < h = qtr_get_all (QNode ul ur dl dr) res
+                                                      | otherwise = new_res
   where
     (d_min, d_max) = distToRect coords pos
 
     ((x_l, y_d), (x_r, y_u)) = coords
     x_m = (x_l + x_r) / 2
     y_m = (y_d + y_u) / 2
-    res = take max_vic ((qtr_get_vicinity ((x_l, y_m), (x_m, y_u)) ul h pos) ++ 
-          (qtr_get_vicinity ((x_m, y_m), (x_r, y_u)) ur h pos) ++ 
-          (qtr_get_vicinity ((x_l, y_d), (x_m, y_m)) dl h pos) ++ 
-          (qtr_get_vicinity ((x_m, y_d), (x_r, y_m)) dr h pos))
+    new_res = --take max_vic (
+          (qtr_get_vicinity ((x_l, y_m), (x_m, y_u)) ul h
+          (qtr_get_vicinity ((x_m, y_m), (x_r, y_u)) ur h
+          (qtr_get_vicinity ((x_l, y_d), (x_m, y_m)) dl h
+          (qtr_get_vicinity ((x_m, y_d), (x_r, y_m)) dr h res
+           pos) pos) pos) pos)
+          -- )
 
 -------------------------------------------------
 -------------------------------------------------
@@ -155,7 +155,8 @@ bound_bounce r const_r size_ ((x, y), (vx, vy)) = ((new_x, new_y), (new_vx, new_
     new_vy = if (y - r < 0 || y + r > wy) then (-const_r * vy) else vy
 
 get_vicinity :: Interface -> Float -> Point -> [Entity]
-get_vicinity world r pos = take max_vic (filter check (entities world))
+get_vicinity world r pos = (filter check (entities world))
+            --take max_vic (filter check (entities world))
   where
     check = (\ent -> (dist (e_pos ent) pos) <= r)
 
@@ -177,7 +178,7 @@ density :: Interface -> Point -> Float
 density world pos = sum (map (p_dense (h_smooth world) pos) (entities world)) -- + const_p_0
 
 p_dense :: Float -> Point -> Entity -> Float
-p_dense h c (Particle pos _ m _ _ _) = -- if ((dist pos c) > h) then 0.0 else 
+p_dense h c (Particle pos _ m _ _ _ _) = -- if ((dist pos c) > h) then 0.0 else 
                                        m * (ker_density (dist pos c) h)
 -- p_dense _ _ _ = 0
 

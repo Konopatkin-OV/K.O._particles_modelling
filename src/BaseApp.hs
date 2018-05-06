@@ -3,7 +3,7 @@ module BaseApp where
 import Graphics.Gloss.Data.Point
 import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 import Data.Maybe (isJust, fromJust)
 import Debug.Trace
 import Text.Read (readMaybe)
@@ -43,7 +43,8 @@ action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos 
                              e_mass = 1,
                              e_dense = 1.0, -- само пусть считается
                              e_radius = 20,
-                             e_color = makeColor 0.0 0.0 0.6 1.0}
+                             e_color = makeColor 0.0 0.0 0.6 1.0,
+                             e_id = length (entities old_world)}
     w_place = (place (ibase old_world))
     w_size = (size (ibase old_world))
     w_pos = pos - (place (ibase old_world)) -- положение указателя относительно мира
@@ -164,13 +165,13 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
   where
     (x, y) = (place (ibase world))
     (sx, sy) = (size (ibase world))
-    coords = ((0, 0), (sx, sy))
-    qtree = foldr (qtr_insert coords (h_smooth world)) (QLeaf []) (entities world)
+    --coords = ((0, 0), (sx, sy))
+    --qtree = foldr (qtr_insert coords (h_smooth world)) (QLeaf []) (entities world)
 
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
-draw_qtree coords (QLeaf p) = pictures [(color red (pictures (map (\ent -> (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2))) p))),
-                                   (color (makeColor 1.0 0.0 0.0 (min 1.0 (0.1 * (fromIntegral (length p))))) (polygon [(x_l, y_d), (x_l, y_u), (x_r, y_u), (x_r, y_d)]))]
+draw_qtree _ QEmpty = Blank
+draw_qtree coords (QLeaf p) = (color red (translate (fst (e_pos p)) (snd (e_pos p)) (circleSolid 2)))
   where
     ((x_l, y_d), (x_r, y_u)) = coords
 draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
@@ -188,7 +189,7 @@ draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (
 
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Float -> Entity -> Picture
-draw_entity h (Particle (x, y) _ _ _ r c) = pictures [color c (translate x y (circleSolid (h / 2))),
+draw_entity h (Particle (x, y) _ _ _ r c _) = pictures [color c (translate x y (circleSolid (h / 2))),
                                             color (withAlpha 0.05 c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
@@ -215,26 +216,26 @@ process_time _ elem_ = elem_
 
 
 process_world :: Float -> Interface -> Interface
-process_world time world | (not (is_pause world)) = -- trace (if test_vic /= test_vic_old then ((show test_vic) ++ " | " ++ (show test_vic_old) ++ "\n") else "")
+process_world time world | (not (is_pause world)) = --trace (if test_vic /= test_vic_old then ((show test_vic) ++ " | " ++ (show test_vic_old) ++ "\n") else "")
                            (tmp_world { entities = (map (process_entity f_vic_1 tmp_world dt) (entities tmp_world))})
                          | otherwise = world
   where
     h = (h_smooth world)
     dt = (time * (time_speed world))
 
-    qtree_0 = foldr (qtr_insert coords h) (QLeaf []) (entities world)
-    --f_vic_0 = (qtr_get_vicinity coords qtree_0 h)
-    f_vic_0 = (get_vicinity world h)
+    qtree_0 = foldr (qtr_insert coords) QEmpty (entities world)
+    f_vic_0 = (qtr_get_vicinity coords qtree_0 h [])
+    --f_vic_0 = (get_vicinity world h)
     tmp_world = world { entities = (map (refresh_density f_vic_0 world) (entities world))}
 
-    qtree_1 = foldr (qtr_insert coords h) (QLeaf []) (entities tmp_world)
-    --f_vic_1 = (qtr_get_vicinity coords qtree_1 h)
-    f_vic_1 = (get_vicinity tmp_world h)
+    qtree_1 = foldr (qtr_insert coords) QEmpty (entities tmp_world)
+    f_vic_1 = (qtr_get_vicinity coords qtree_1 h [])
+    --f_vic_1 = (get_vicinity tmp_world h)
 
     coords = ((0, 0), (size (ibase world)))
 
-    --test_vic = (f_vic (390, 10))
-    --test_vic_old = (f_vic_old (390, 10))
+    --test_vic = sort (map e_id (f_vic_0 (390, 10)))
+    --test_vic_old = sort (map e_id (f_vic_0_old (390, 10)))
     --test_len = (length test_vic)
     --test_len_old = (length test_vic_old)
 
@@ -247,7 +248,7 @@ refresh_density f_vic world ent = ent {e_dense = density world {entities = vicin
             -- (get_vicinity r pos world)
 
 process_entity :: (Point -> [Entity]) -> Interface -> Float -> Entity -> Entity
-process_entity f_vic world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos new_vel m p r c 
+process_entity f_vic world time (Particle (x, y) (vx, vy) m p r c i) = Particle new_pos new_vel m p r c i
 -- что-то может пойти не так, если world не (World ...), а другой интерфейс (Button/Slider)
   where
     (f_x, f_y) = use_force p (vx, vy) world {entities = vicinity} (x, y)  -- и здесь был r вместо h
@@ -288,22 +289,23 @@ load_world h_smooth_ place_ size_ file =
                                   draw = draw_world,               ---------------------------------------------------------------------------------------------
                                   process = process_world}         ---------------------------------------------------------------------------------------------
                   , h_smooth = h_smooth_
-                  , entities = (map fromJust (filter isJust (map load_particle (tail (tail strings)))))
+                  , entities = (map fromJust (filter isJust (zipWith load_particle [1..] (tail (tail strings)))))
                   , back_col = load_color_l (head strings)
                   , time_speed = 1.0
                   , is_pause = True
                   , constants = load_const (strings !! 1)} -- костылик
 
 
-load_particle :: [String] -> Maybe Entity
-load_particle (x_pos : (y_pos : (x_speed : (y_speed : (mass : (rad : col)))))) = 
+load_particle :: Int -> [String] -> Maybe Entity
+load_particle p_id (x_pos : (y_pos : (x_speed : (y_speed : (mass : (rad : col)))))) = 
   Just Particle { e_pos = ((read x_pos :: Float), (read y_pos :: Float))
                 , e_speed = ((read x_speed :: Float), (read y_speed :: Float))
                 , e_mass = (read mass :: Float)
                 , e_dense = 1.0 -- всё равно пересчитается
                 , e_radius = (read rad :: Float)
-                , e_color = load_color_l col}
-load_particle _ = Nothing
+                , e_color = load_color_l col
+                , e_id = p_id}
+load_particle _ _ = Nothing
 -- получить цвет из первых 4 элементов списка (RGBA)
 load_color_l :: [String] -> Color
 load_color_l (col_r : (col_g : (col_b : (col_a : _)))) = makeColor (read col_r :: Float) (read col_g :: Float)
@@ -332,5 +334,5 @@ write_entities ents = foldr write_next_entity "" ents
 
 -- страшная строчка
 write_next_entity :: Entity -> String -> String
-write_next_entity (Particle (x, y) (vx, vy) m _ r col) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
+write_next_entity (Particle (x, y) (vx, vy) m _ r col _) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
 --write_next_entity _ buf = buf
