@@ -2,6 +2,9 @@ module BaseClasses where
 
 import Graphics.Gloss.Interface.IO.Game
 
+const_FPS :: Int
+const_FPS = 60
+
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
   , mouse_pos :: (Float, Float)}   -- положение указателя
@@ -74,6 +77,7 @@ data Entity = Particle           -- частица
   , e_mass   :: Float            -- масса
   , e_dense  :: Float            -- плотность, пересчитывается автоматически
   , e_radius :: Float            -- размер частицы (для рисования/столкновений)
+                                 -- так получилось, что считаем его h / 2 везде...
   , e_color  :: Color}           -- цвет частицы
-  deriving Show
+  deriving (Show, Eq)
 

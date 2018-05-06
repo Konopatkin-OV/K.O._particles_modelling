@@ -6,15 +6,17 @@ import BaseClasses
 import Graphics.Gloss.Interface.IO.Game
 
 run :: IO ()
-run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
+run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
          let app = App {elems = [world, button_load, button_save, button_reload, 
                                  text_field_time, slider_time, button_go, button_pause,
                                  text_field_const_k, slider_const_k, text_field_const_p_0, slider_const_p_0,
                                  text_field_const_myu, slider_const_myu, text_field_const_sigma, slider_const_sigma,
-                                 text_field_const_g, slider_const_g, text_field_const_r, slider_const_r
+                                 text_field_const_g, slider_const_g, text_field_const_r, slider_const_r,
+                                 text_field_const_h, slider_const_h
+                                 , button_shake -- костылики
                                 ], 
                         mouse_pos = (0, 0)}
-         playIO display white 100 app app_draw app_handle_events app_process 
+         playIO display white const_FPS app app_draw app_handle_events app_process 
            where
              display = (InWindow "TEST" (800, 900) (0, 0))
 -----------------------------------------------------   кнопки загрузки/сохранения   ------------------------------------------
@@ -137,7 +139,8 @@ run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
                                  size = (250, 30),
                                  action = action_multi [(action_change_text 8 (slider_to_text 9 (* 0.1) "Pressure: %.1f")),
                                                         (action_slider 9),
-                                                        (action_set_world_const 0 ((* 100000000) . (get_slider_val 9)))],
+                                                        (action_set_world_const 0 ((* 1) . (get_slider_val_with_h (** 5) 9)))],
+                                                     -- (action_set_world_const 0 ((* 100000000) . (get_slider_val 9)))],
                                                         -- 8 - текстовое поле, которое зависит от 9-слайдера
                                  draw = draw_slider,
                                  process = process_none}
@@ -194,7 +197,8 @@ run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
                                  size = (250, 30),
                                  action = action_multi [(action_change_text 12 (slider_to_text 13 (* 0.1) "Viscosity: %.1f")),
                                                         (action_slider 13),
-                                                        (action_set_world_const 2 ((* 3000000) . (get_slider_val 13)))],
+                                                        (action_set_world_const 2 ((* 0.03) . (get_slider_val_with_h (** 5) 13)))],
+                                                     -- (action_set_world_const 2 ((* 3000000) . (get_slider_val 13)))],
                                  draw = draw_slider,
                                  process = process_none}
 ----------------------------------------------------------------------------------
@@ -222,7 +226,8 @@ run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
                                  size = (250, 30),
                                  action = action_multi [(action_change_text 14 (slider_to_text 15 (* 0.1) "Tension: %.1f")),
                                                         (action_slider 15),
-                                                        (action_set_world_const 3 ((* 100000000) . (get_slider_val 15)))],
+                                                        (action_set_world_const 3 ((* 1) . (get_slider_val_with_h (** 5) 15)))],
+                                                    --  (action_set_world_const 3 ((* 100000000) . (get_slider_val 15)))],
                                  draw = draw_slider,
                                  process = process_none}
 ----------------------------------------------------------------------------------
@@ -281,4 +286,47 @@ run = do world <- load_world 40 (-350, -380) (400, 780) "world.txt"
                                                         (action_set_world_const 5 ((* 0.02) . (get_slider_val 19)))],
                                  draw = draw_slider,
                                  process = process_none}
+------------------------------------------------------------------------------------------------------------------------------
+             text_field_const_h     = TextField {ibase = t_f_c_6_base,
+                                                 t_text = "Smooth radius: 10",
+                                                 t_col = black,
+                                                 t_scale = 0.15}
+             t_f_c_6_base = IBase {place = (100, -420),
+                                   size = (250, 30),
+                                   action = action_none,
+                                   draw = draw_text_field,
+                                   process = process_none}
+
+             slider_const_h     = Slider {ibase = s_c_6_base,
+                                          s_indent = (10, 3),
+                                          s_min = 1,
+                                          s_max = 50,
+                                          s_pts = 50,
+                                          s_curpt = 9,
+                                          s_col = (makeColor 0.5 0.5 0.5 1.0),
+                                          s_sl_size = 10,
+                                          s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                          s_m_act = False}
+             s_c_6_base = IBase {place = (100, -450),
+                                 size = (250, 30),
+                                 action = action_multi [(action_change_text 20 (slider_to_text 21 id "Smooth radius: %.0f")),
+                                                        (action_slider 21),
+                                                        (action_set_world_h (get_slider_val 21))],
+                                 draw = draw_slider,
+                                 process = process_none}
+------------------------------------------------------------------------------------------------------------------------------
+
+------------------------------------------------   кнопка для расклеивания частиц   ------------------------------------------
+             b_shk_base = IBase {place = (-300, -450), 
+                                 size = (300, 50),
+                                 action = (action_click b_shk_base (action_button_click 22 (action_shake_world))),
+                                 draw = draw_button,
+                                 process = process_time
+                                 }
+             button_shake = Button {ibase = b_shk_base,
+                                    b_text = "separate particles",
+                                    b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                    b_click_col = (makeColor 0.7 0.1 0.1 1.0),
+                                    b_text_col = (makeColor 0.7 0.1 0.1 1.0),
+                                    b_time = 1.0}
 ------------------------------------------------------------------------------------------------------------------------------

@@ -158,15 +158,38 @@ draw_slider sl = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (r
 
 draw_world :: Interface -> Picture
 draw_world world = translate x y (pictures [color (back_col world) (polygon [(0, 0), (0, sy), (sx, sy), (sx, 0)]),
-                                           (pictures (map draw_entity (entities world)))])
+                                           (pictures (map (draw_entity (h_smooth world)) (entities world)))
+                                           --, (draw_qtree coords qtree)
+                                           ])
   where
     (x, y) = (place (ibase world))
     (sx, sy) = (size (ibase world))
+    coords = ((0, 0), (sx, sy))
+    qtree = foldr (qtr_insert coords (h_smooth world)) (QLeaf []) (entities world)
+
+--------------------- костыль для тестирования -------------------------
+draw_qtree :: (Point, Point) -> QuadTree -> Picture
+draw_qtree coords (QLeaf p) = pictures [(color red (pictures (map (\ent -> (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2))) p))),
+                                   (color (makeColor 1.0 0.0 0.0 (min 1.0 (0.1 * (fromIntegral (length p))))) (polygon [(x_l, y_d), (x_l, y_u), (x_r, y_u), (x_r, y_d)]))]
+  where
+    ((x_l, y_d), (x_r, y_u)) = coords
+draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
+                                                  color red (Line [(x_l, y_m), (x_r, y_m)]),
+                                                  draw_qtree ((x_l, y_m), (x_m, y_u)) ul,
+                                                  draw_qtree ((x_m, y_m), (x_r, y_u)) ur,
+                                                  draw_qtree ((x_l, y_d), (x_m, y_m)) dl,
+                                                  draw_qtree ((x_m, y_d), (x_r, y_m)) dr]
+  where
+    ((x_l, y_d), (x_r, y_u)) = coords
+    x_m = (x_l + x_r) / 2
+    y_m = (y_d + y_u) / 2
+------------------------------------------------------------------------
+
 
 -- x, y = координаты частицы; r = радиус; c = цвет
-draw_entity :: Entity -> Picture
-draw_entity (Particle (x, y) _ _ _ r c) = pictures [color c (translate x y (circleSolid r)),
-                                                    color (withAlpha 0.05 c) (translate x y (circleSolid 40))]
+draw_entity :: Float -> Entity -> Picture
+draw_entity h (Particle (x, y) _ _ _ r c) = pictures [color c (translate x y (circleSolid (h / 2))),
+                                            color (withAlpha 0.05 c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
 
@@ -192,38 +215,51 @@ process_time _ elem_ = elem_
 
 
 process_world :: Float -> Interface -> Interface
-process_world time world | (not (is_pause world)) = tmp_world { entities = (map (process_entity tmp_world dt) (entities tmp_world))}
+process_world time world | (not (is_pause world)) = -- trace (if test_vic /= test_vic_old then ((show test_vic) ++ " | " ++ (show test_vic_old) ++ "\n") else "")
+                           (tmp_world { entities = (map (process_entity f_vic_1 tmp_world dt) (entities tmp_world))})
                          | otherwise = world
   where
+    h = (h_smooth world)
     dt = (time * (time_speed world))
-    tmp_world = world { entities = (map (refresh_density world) (entities world))}
 
-refresh_density :: Interface -> Entity -> Entity
-refresh_density world ent = ent {e_dense = density (get_vicinity r pos world) pos}
+    qtree_0 = foldr (qtr_insert coords h) (QLeaf []) (entities world)
+    --f_vic_0 = (qtr_get_vicinity coords qtree_0 h)
+    f_vic_0 = (get_vicinity world h)
+    tmp_world = world { entities = (map (refresh_density f_vic_0 world) (entities world))}
+
+    qtree_1 = foldr (qtr_insert coords h) (QLeaf []) (entities tmp_world)
+    --f_vic_1 = (qtr_get_vicinity coords qtree_1 h)
+    f_vic_1 = (get_vicinity tmp_world h)
+
+    coords = ((0, 0), (size (ibase world)))
+
+    --test_vic = (f_vic (390, 10))
+    --test_vic_old = (f_vic_old (390, 10))
+    --test_len = (length test_vic)
+    --test_len_old = (length test_vic_old)
+
+refresh_density :: (Point -> [Entity]) -> Interface -> Entity -> Entity
+refresh_density f_vic world ent = ent {e_dense = density world {entities = vicinity} pos}
   where
     -- покойся с миром, идиотский баг: "r = (e_radius ent)"
-    r = (h_smooth world)
     pos = (e_pos ent)
+    vicinity = f_vic pos
+            -- (get_vicinity r pos world)
 
-process_entity :: Interface -> Float -> Entity -> Entity
-process_entity world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos new_vel m p r c 
+process_entity :: (Point -> [Entity]) -> Interface -> Float -> Entity -> Entity
+process_entity f_vic world time (Particle (x, y) (vx, vy) m p r c) = Particle new_pos new_vel m p r c 
 -- что-то может пойти не так, если world не (World ...), а другой интерфейс (Button/Slider)
   where
-    --(wx, wy) = (size (ibase world))
-    --tmp_x = x + time * dx
-    --new_x = if tmp_x < 0 then (-tmp_x) else (if tmp_x > wx then (2 * wx - tmp_x) else tmp_x)
-    --tmp_y = y + time * dy
-    --new_y = if tmp_y < 0 then (-tmp_y) else (if tmp_y > wy then (2 * wy - tmp_y) else tmp_y)
-    --tmp_dx = if (tmp_x < 0 || tmp_x > wx) then (-dx) else dx
-    --tmp_dy = if (tmp_y < 0 || tmp_y > wy) then (-dy) else dy
-    (f_x, f_y) = use_force p (vx, vy) (get_vicinity (h_smooth world) (x, y) world) (x, y)  -- и здесь был r вместо h
+    (f_x, f_y) = use_force p (vx, vy) world {entities = vicinity} (x, y)  -- и здесь был r вместо h
     tmp_vx = vx + time * (f_x / m)
     tmp_vy = vy + time * (f_y / m) - const_g * time  -- добавляем ускорение свободного падения
-    (new_pos, new_vel) = (bound_bounce r const_r (size (ibase world))
-                          ((x + time * tmp_vx, y + time * tmp_vy), 
+    (new_pos, new_vel) = (bound_bounce ((h_smooth world) / 2) const_r (size (ibase world))
+                          ((x + time * (vx + tmp_vx) / 2, y + time * (vy + tmp_vy) / 2), 
                            (tmp_vx, tmp_vy)))
     const_g = (constants world) !! 4
     const_r = (constants world) !! 5
+    vicinity = f_vic (x, y)
+             --(get_vicinity (h_smooth world) (x, y) world)
 -- посчитали силу -> использовали силу -> проехали -> отразились
 --process_entity _ _ e = e
 
@@ -283,13 +319,13 @@ load_const consts = if (length res) == 6 then res else base_consts
 
 -- -с-п-а-с-е-н-и-е- сохранение мира в файл
 save_world :: Interface -> String -> IO ()
-save_world world file = writeFile file ((write_color (back_col world)) ++ (write_f_list (constants world)) ++ (write_entities (entities world)))
+save_world world file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (constants world)) ++ "\n" ++ (write_entities (entities world)))
 
 write_color :: Color -> String
 write_color col = drop 5 (show col)
 
 write_f_list :: [Float] -> String
-write_f_list list = foldr (++) "" (map show list)
+write_f_list list = foldr (++) "" (map ((++ " ") . show) list)
 
 write_entities :: [Entity] -> String
 write_entities ents = foldr write_next_entity "" ents

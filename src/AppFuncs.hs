@@ -29,6 +29,9 @@ get_slider_val :: Int -> Application -> Float
 get_slider_val num app = (s_value ((elems app) !! num))
 
 
+get_slider_val_with_h :: (Float -> Float) -> Int -> Application -> Float
+get_slider_val_with_h f_h num app = (get_slider_val num app) * (f_h (h_smooth (head (elems app))))
+
 -- специальный костыль для отображения паузы
 action_change_time_text :: Int -> (Application -> String) -> Event -> Application -> IO Application
 action_change_time_text num f _ app = return (replace_int num new_text_field app)
@@ -50,6 +53,11 @@ action_set_world_time_speed f _ app = return (replace_int 0 new_world app)
   where
     new_world = ((elems app) !! 0) {time_speed = f app}
 
+action_set_world_h :: (Application -> Float) -> Event -> Application -> IO Application
+action_set_world_h f _ app = return (replace_int 0 new_world app)
+  where
+    new_world = ((elems app) !! 0) {h_smooth = f app}
+
 action_set_world_const :: Int -> (Application -> Float) -> Event -> Application -> IO Application
 action_set_world_const num f _ app = return (replace_int 0 new_world app)
   where
@@ -57,6 +65,23 @@ action_set_world_const num f _ app = return (replace_int 0 new_world app)
     new_world = (world {constants = new_consts})
     consts = (constants world)
     new_consts = replace_elem num (f app) consts
+
+-- немного сдвинуть каждую частицу
+action_shake_world :: Application -> IO Application
+action_shake_world app = return new_app
+  where
+    new_app = replace_int 0 new_world app
+    world = head (elems app)
+    new_world = world {entities = shaken}
+    (shaken, _) = foldr f_shake ([], 0) (entities world)
+
+f_shake :: Entity -> ([Entity], Int) -> ([Entity], Int)
+f_shake ent (res, n) = ((new_ent : res), n + 1)
+  where
+    (x, y) = (e_pos ent)
+    shift = const_EPS * (fromIntegral n)
+    new_ent = ent {e_pos = (x + shift, y + shift)}
+    const_EPS = 0.001
 
 -- может ещё где-нибудь пригодится, из встроенных есть модуль lens со стрёмным синтаксисом
 replace_elem :: Int -> a -> [a] -> [a]
