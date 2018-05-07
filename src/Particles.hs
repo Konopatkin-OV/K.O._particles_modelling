@@ -18,7 +18,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                         mouse_pos = (0, 0)}
          playIO display white const_FPS app app_draw app_handle_events app_process 
            where
-             display = (InWindow "TEST" (800, 900) (0, 0))
+             display = (InWindow "Particles" (800, 900) (0, 0))
 -----------------------------------------------------   кнопки загрузки/сохранения   ------------------------------------------
              b_l_base = IBase {place = (100, 290), 
                                size = (250, 50),

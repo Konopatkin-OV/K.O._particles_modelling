@@ -170,8 +170,9 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
-draw_qtree _ QEmpty = Blank
-draw_qtree coords (QLeaf p) = (color red (translate (fst (e_pos p)) (snd (e_pos p)) (circleSolid 2)))
+draw_qtree _ (QLeaf []) = Blank
+draw_qtree coords (QLeaf p) = pictures (map 
+  (\ent -> (color red (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2)))) p)
   where
     ((x_l, y_d), (x_r, y_u)) = coords
 draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
@@ -223,12 +224,12 @@ process_world time world | (not (is_pause world)) = --trace (if test_vic /= test
     h = (h_smooth world)
     dt = (time * (time_speed world))
 
-    qtree_0 = foldr (qtr_insert coords) QEmpty (entities world)
+    qtree_0 = foldr (qtr_insert coords (h * const_tree_size)) (QLeaf []) (entities world)
     f_vic_0 = (qtr_get_vicinity coords qtree_0 h [])
     --f_vic_0 = (get_vicinity world h)
     tmp_world = world { entities = (map (refresh_density f_vic_0 world) (entities world))}
 
-    qtree_1 = foldr (qtr_insert coords) QEmpty (entities tmp_world)
+    qtree_1 = foldr (qtr_insert coords (h * const_tree_size)) (QLeaf []) (entities tmp_world)
     f_vic_1 = (qtr_get_vicinity coords qtree_1 h [])
     --f_vic_1 = (get_vicinity tmp_world h)
 

@@ -38,28 +38,29 @@ base_consts = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 -- минимальная диагональ клетки дерева относитально длины сглаживания
 const_tree_size :: Float
-const_tree_size = 0.1
+const_tree_size = 5.0
+-- почему-то если больше 1.0 работает лучше, чем при меньше 1.0 
 
 -- дерево квадрантов для поиска соседей частиц
 -- порядок квадрантов: верхний левый, верхный правый, 
 --                     нижний левый,  нижний правый
-data QuadTree = QNode QuadTree QuadTree QuadTree QuadTree | QLeaf Entity | QEmpty
+data QuadTree = QNode QuadTree QuadTree QuadTree QuadTree | QLeaf [Entity]
 
 -- принимает левый нижний угол дерева и верхний правый угол дерева, расстояние сглаживания,
 -- новую частицу и дерево, в которое она добавляется
-qtr_insert :: (Point, Point) -> Entity -> QuadTree -> QuadTree
-qtr_insert _ p_new QEmpty = (QLeaf p_new)
-qtr_insert coords p_new (QLeaf p) = new_tree
+qtr_insert :: (Point, Point) -> Float -> Entity -> QuadTree -> QuadTree
+qtr_insert _ _ p_new (QLeaf []) = (QLeaf [p_new])
+qtr_insert coords h p_new (QLeaf p) = new_tree
   where
     ((x_l, y_d), (x_r, y_u)) = coords
     x_m = (x_l + x_r) / 2
     y_m = (y_d + y_u) / 2
-    --new_tree = if (dist (x_l, y_d) (x_r, y_u)) < h 
-               --then (QLeaf (p_new : p))
-               --else split_tree
-    new_tree = QNode ul ur dl dr
+    new_tree = if (dist (x_l, y_d) (x_r, y_u)) < h 
+               then (QLeaf (p_new : p))
+               else split_tree
+    split_tree = QNode ul ur dl dr
 
-    old_pos = (e_pos p)
+    old_pos = (e_pos (head p))
     new_pos = (e_pos p_new)
     -- нашли квадрант со старой точкой
     ul_rect = ((x_l, y_m), (x_m, y_u))
@@ -67,24 +68,24 @@ qtr_insert coords p_new (QLeaf p) = new_tree
     dl_rect = ((x_l, y_d), (x_m, y_m))
     dr_rect = ((x_m, y_d), (x_r, y_m))
 
-    ul_0 = if (pointInRect ul_rect old_pos) then (QLeaf p) else QEmpty
-    ur_0 = if (pointInRect ur_rect old_pos) then (QLeaf p) else QEmpty
-    dl_0 = if (pointInRect dl_rect old_pos) then (QLeaf p) else QEmpty
-    dr_0 = if (pointInRect dr_rect old_pos) then (QLeaf p) else QEmpty
+    ul_0 = if (pointInRect ul_rect old_pos) then (QLeaf p) else (QLeaf [])
+    ur_0 = if (pointInRect ur_rect old_pos) then (QLeaf p) else (QLeaf [])
+    dl_0 = if (pointInRect dl_rect old_pos) then (QLeaf p) else (QLeaf [])
+    dr_0 = if (pointInRect dr_rect old_pos) then (QLeaf p) else (QLeaf [])
     -- рекурсивно добавляем новую точку
     ul = if (pointInRect ul_rect new_pos) 
-    then qtr_insert ul_rect p_new ul_0 else ul_0
+    then qtr_insert ul_rect h p_new ul_0 else ul_0
 
     ur = if (pointInRect ur_rect new_pos)
-    then qtr_insert ur_rect p_new ur_0 else ur_0
+    then qtr_insert ur_rect h p_new ur_0 else ur_0
 
     dl = if (pointInRect dl_rect new_pos)
-    then qtr_insert dl_rect p_new dl_0 else dl_0
+    then qtr_insert dl_rect h p_new dl_0 else dl_0
 
     dr = if (pointInRect dr_rect new_pos)
-    then qtr_insert dr_rect p_new dr_0 else dr_0
+    then qtr_insert dr_rect h p_new dr_0 else dr_0
 
-qtr_insert coords p_new (QNode ul ur dl dr) = new_tree 
+qtr_insert coords h p_new (QNode ul ur dl dr) = new_tree 
   where
     ((x_l, y_d), (x_r, y_u)) = coords
     x_m = (x_l + x_r) / 2
@@ -101,16 +102,16 @@ qtr_insert coords p_new (QNode ul ur dl dr) = new_tree
                 if (pointInRect dl_rect pos) then (QNode ul ur upd_dl dr) else (
                 if (pointInRect dr_rect pos) then (QNode ul ur dl upd_dr) else 
                 (QNode ul ur dl dr))))
-    upd_ul = (qtr_insert ul_rect p_new ul)
-    upd_ur = (qtr_insert ur_rect p_new ur)
-    upd_dl = (qtr_insert dl_rect p_new dl)
-    upd_dr = (qtr_insert dr_rect p_new dr)
+    upd_ul = (qtr_insert ul_rect h p_new ul)
+    upd_ur = (qtr_insert ur_rect h p_new ur)
+    upd_dl = (qtr_insert dl_rect h p_new dl)
+    upd_dr = (qtr_insert dr_rect h p_new dr)
 
 
 -- получить список из всех частиц в дереве
 qtr_get_all :: QuadTree -> [Entity] -> [Entity]
-qtr_get_all QEmpty res = res
-qtr_get_all (QLeaf p) res = (p : res)
+qtr_get_all (QLeaf []) res = res
+qtr_get_all (QLeaf p) res = (p ++ res)
 qtr_get_all (QNode ul ur dl dr) res = (qtr_get_all ul
                                       (qtr_get_all ur
                                       (qtr_get_all dl
@@ -119,9 +120,13 @@ qtr_get_all (QNode ul ur dl dr) res = (qtr_get_all ul
 -- принимает левый нижний угол дерева и верхний правый угол дерева, дерево, расстояние сглаживания,
 -- и точку, окрестность которой нужно найти
 qtr_get_vicinity :: (Point, Point) -> QuadTree -> Float -> [Entity] -> Point -> [Entity]
-qtr_get_vicinity _ QEmpty _ res _ = res
-qtr_get_vicinity coords (QLeaf p) h res pos | dist pos (e_pos p) < h = (p : res)
-                                            | otherwise = res
+qtr_get_vicinity _ (QLeaf []) _ res _ = res
+qtr_get_vicinity coords (QLeaf p) h res pos | d_min > h = res
+                                            | d_max < h = (p ++ res)
+                                            | otherwise = (p_near ++ res)
+  where
+    (d_min, d_max) = distToRect coords pos
+    p_near = filter (\ent -> (dist pos (e_pos ent)) < h) p
 
 qtr_get_vicinity coords (QNode ul ur dl dr) h res pos | d_min > h = res
                                                       | d_max < h = qtr_get_all (QNode ul ur dl dr) res
