@@ -3,9 +3,9 @@ module BaseApp where
 import Graphics.Gloss.Data.Point
 import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
-import Data.List (intercalate, sort)
+import Data.List (intercalate)
 import Data.Maybe (isJust, fromJust)
-import Debug.Trace
+--import Debug.Trace
 import Text.Read (readMaybe)
 
 import BaseClasses
@@ -155,7 +155,7 @@ draw_slider sl = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (r
     sl_pos = dx + (fromIntegral (s_curpt sl)) * d_pt
     d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
     cur_col = black
-
+ 
 
 draw_world :: Interface -> Picture
 draw_world world = translate x y (pictures [color (back_col world) (polygon [(0, 0), (0, sy), (sx, sy), (sx, 0)]),
@@ -171,10 +171,10 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
 draw_qtree _ (QLeaf []) = Blank
-draw_qtree coords (QLeaf p) = pictures (map 
+draw_qtree _ (QLeaf p) = pictures (map 
   (\ent -> (color red (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2)))) p)
-  where
-    ((x_l, y_d), (x_r, y_u)) = coords
+  --where
+    --((x_l, y_d), (x_r, y_u)) = coords
 draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
                                                   color red (Line [(x_l, y_m), (x_r, y_m)]),
                                                   draw_qtree ((x_l, y_m), (x_m, y_u)) ul,
@@ -190,7 +190,7 @@ draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (
 
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Float -> Entity -> Picture
-draw_entity h (Particle (x, y) _ _ _ r c _) = pictures [color c (translate x y (circleSolid (h / 2))),
+draw_entity h (Particle (x, y) _ _ _ _ c _) = pictures [color c (translate x y (circleSolid (h / 2))),
                                             color (withAlpha 0.05 c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank

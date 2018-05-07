@@ -2,10 +2,10 @@ module Physics where
 
 import Graphics.Gloss.Data.Point
 import Graphics.Gloss.Data.Vector
-import Debug.Trace
+--import Debug.Trace
 
 import BaseClasses
-
+ 
 -------------------------------------------------
 -- параметры жидкости
 -- TODO: возможно приклеить к отдельным частицам

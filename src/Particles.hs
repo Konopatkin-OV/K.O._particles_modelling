@@ -4,7 +4,7 @@ import BaseApp
 import AppFuncs
 import BaseClasses
 import Graphics.Gloss.Interface.IO.Game
-
+ 
 run :: IO ()
 run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
          let app = App {elems = [world, button_load, button_save, button_reload, 

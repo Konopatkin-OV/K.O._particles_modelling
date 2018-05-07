@@ -4,7 +4,7 @@ import Graphics.Gloss.Interface.IO.Game
 
 const_FPS :: Int
 const_FPS = 30
-
+ 
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
   , mouse_pos :: (Float, Float)}   -- положение указателя

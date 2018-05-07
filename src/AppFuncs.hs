@@ -1,10 +1,10 @@
 module AppFuncs where
 
-import Graphics.Gloss.Data.Point
-import Graphics.Gloss.Data.Vector
+--import Graphics.Gloss.Data.Point
+--import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
 import Text.Printf
-import Debug.Trace
+--import Debug.Trace
 
 import BaseClasses
 import BaseApp
@@ -79,8 +79,8 @@ f_shake :: Entity -> ([Entity], Int) -> ([Entity], Int)
 f_shake ent (res, n) = ((new_ent : res), n + 1)
   where
     (x, y) = (e_pos ent)
-    shift = const_EPS * (fromIntegral n)
-    new_ent = ent {e_pos = (x + shift, y + shift)}
+    shft = const_EPS * (fromIntegral n)
+    new_ent = ent {e_pos = (x + shft, y + shft)}
     const_EPS = 0.001
 
 -- может ещё где-нибудь пригодится, из встроенных есть модуль lens со стрёмным синтаксисом
