@@ -21,6 +21,8 @@ run = do app <- load_world "world.txt" init_app
                                  text_field_const_h, slider_const_h
                                  , button_shake -- костылики
                                 ], 
+                        app_scale = 1.0, 
+                        base_size = (800, 900),
                         mouse_pos = (0, 0)}
              init_world = World {ibase = IBase {place = (-350, -380),
                                                 size = (400, 780),

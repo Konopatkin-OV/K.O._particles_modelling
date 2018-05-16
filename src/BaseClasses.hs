@@ -7,6 +7,8 @@ const_FPS = 30
 
 data Application = App             -- объект окна с приложением
   { elems :: [Interface]           -- интерактивные и не очень элементы интерфейса
+  , app_scale :: Float                 -- масштаб окна
+  , base_size :: (Int, Int)        -- базовый размер окна (для масштабирования)
   , mouse_pos :: (Float, Float)}   -- положение указателя
   deriving Show
 

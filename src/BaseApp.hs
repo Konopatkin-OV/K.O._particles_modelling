@@ -13,7 +13,21 @@ import Physics
 
 -------------------------- обработчик событий --------------------------
 app_handle_events :: Event -> Application -> IO Application
-app_handle_events event app = (foldr (elem_action event) (return app) (elems app))
+app_handle_events (EventResize ws) app = return app {app_scale = sc}
+  where
+    (x, y) = ws
+    (bx, by) = (base_size app)
+    sc = min ((fromIntegral x) / (fromIntegral bx)) ((fromIntegral y) / (fromIntegral by)) -- масштаб
+-- костыли для масштаба
+app_handle_events (EventMotion (x, y)) app = (foldr (elem_action event) (return app) (elems app))
+  where 
+    s = (app_scale app)
+    event = (EventMotion (x / s, y / s))
+app_handle_events (EventKey a b c (x, y)) app = (foldr (elem_action event) (return app) (elems app))
+  where 
+    s = (app_scale app)
+    event = (EventKey a b c (x / s, y / s))
+
  
 elem_action :: Event -> Interface -> IO Application -> IO Application
 elem_action event element app = do cur_app <- app
@@ -120,7 +134,9 @@ action_save_world filename app = do save_world app filename
 
 -------------------------- отрисовка приложения ------------------------
 app_draw :: Application -> IO Picture
-app_draw app = return (pictures (map elem_draw (elems app)))
+app_draw app = return (scale c c (pictures (map elem_draw (elems app))))
+  where
+    c = (app_scale app)
 
 elem_draw :: Interface -> Picture
 elem_draw element = (draw (ibase element)) $ element
