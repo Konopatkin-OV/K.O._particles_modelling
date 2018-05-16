@@ -3,9 +3,9 @@ module BaseApp where
 import Graphics.Gloss.Data.Point
 import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 import Data.Maybe (isJust, fromJust)
---import Debug.Trace
+import Debug.Trace
 import Text.Read (readMaybe)
 
 import BaseClasses
@@ -104,16 +104,17 @@ get_sl_pt sl pos = (max 0 (min ((s_pts sl) - 1) (round (x / d_pt))))
 
 
 action_load_world :: String -> Application -> IO Application
-action_load_world filename app = do r_world <- load_world h_smooth_ place_ size_ filename
-                                    return (replace_int 0 r_world app)
-                                    where
-                                      world = (elems app) !! 0
-                                      h_smooth_ = (h_smooth world)
-                                      place_ = (place (ibase world))
-                                      size_ = (size (ibase world))
+action_load_world filename app = load_world filename app
+--                                 do r_world <- load_world h_smooth_ place_ size_ filename
+--                                    return (replace_int 0 r_world app)
+--                                    where
+--                                      world = (elems app) !! 0
+--                                      h_smooth_ = (h_smooth world)
+--                                      place_ = (place (ibase world))
+--                                      size_ = (size (ibase world))
 
 action_save_world :: String -> Application -> IO Application
-action_save_world filename app = do save_world ((elems app) !! 0) filename
+action_save_world filename app = do save_world app filename
                                     return app
 ------------------------------------------------------------------------
 
@@ -155,7 +156,7 @@ draw_slider sl = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (r
     sl_pos = dx + (fromIntegral (s_curpt sl)) * d_pt
     d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
     cur_col = black
- 
+
 
 draw_world :: Interface -> Picture
 draw_world world = translate x y (pictures [color (back_col world) (polygon [(0, 0), (0, sy), (sx, sy), (sx, 0)]),
@@ -171,10 +172,10 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
 draw_qtree _ (QLeaf []) = Blank
-draw_qtree _ (QLeaf p) = pictures (map 
+draw_qtree coords (QLeaf p) = pictures (map 
   (\ent -> (color red (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2)))) p)
-  --where
-    --((x_l, y_d), (x_r, y_u)) = coords
+  where
+    ((x_l, y_d), (x_r, y_u)) = coords
 draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
                                                   color red (Line [(x_l, y_m), (x_r, y_m)]),
                                                   draw_qtree ((x_l, y_m), (x_m, y_u)) ul,
@@ -190,7 +191,7 @@ draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (
 
 -- x, y = координаты частицы; r = радиус; c = цвет
 draw_entity :: Float -> Entity -> Picture
-draw_entity h (Particle (x, y) _ _ _ _ c _) = pictures [color c (translate x y (circleSolid (h / 2))),
+draw_entity h (Particle (x, y) _ _ _ r c _) = pictures [color c (translate x y (circleSolid (h / 2))),
                                             color (withAlpha 0.05 c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
@@ -280,21 +281,18 @@ replace_int n new app = app {elems = (take n el) ++ (new : (drop (n + 1) el))}
 
 --                                 TODO : запихать остальные параметры в файл                
 
-load_world :: Float -> Point -> Vector -> String -> IO Interface
-load_world h_smooth_ place_ size_ file = 
+load_world :: String -> Application -> IO Application
+load_world file app = 
   do file_text <- (readFile file)
      let strings = (filter (\s -> (s /= []) && ((head (head s)) /= '#')) (map words (lines file_text))) ++ [[]]
-     return World {ibase = IBase {place = place_, 
-                                  size = size_,
-                                  action = action_pain,            ---------------------------------------------------------------------------------------------
-                                  draw = draw_world,               ---------------------------------------------------------------------------------------------
-                                  process = process_world}         ---------------------------------------------------------------------------------------------
-                  , h_smooth = h_smooth_
-                  , entities = (map fromJust (filter isJust (zipWith load_particle [1..] (tail (tail strings)))))
-                  , back_col = load_color_l (head strings)
-                  , time_speed = 1.0
-                  , is_pause = True
-                  , constants = load_const (strings !! 1)} -- костылик
+     let new_world = ((elems app) !! 0) {
+            entities = (map fromJust (filter isJust (zipWith load_particle [1..] (tail (tail strings)))))
+          , back_col = load_color_l (head strings)
+          , time_speed = 1.0
+          , is_pause = True
+          , constants = base_consts}
+     let new_app = replace_int 0 new_world (load_sliders (strings !! 1) app)
+     return new_app
 
 
 load_particle :: Int -> [String] -> Maybe Entity
@@ -313,21 +311,34 @@ load_color_l (col_r : (col_g : (col_b : (col_a : _)))) = makeColor (read col_r :
                                                                    (read col_b :: Float) (read col_a :: Float)
 load_color_l _ = black
 
-load_const :: [String] -> [Float]
-load_const consts = if (length res) == 6 then res else base_consts
+load_sliders :: [String] -> Application -> Application
+load_sliders consts app = if (length vals) == (length const_sliders) then new_app else app
   where
-    res = (map fromJust (filter isJust 
-          (map (readMaybe :: String -> Maybe Float) consts)))
+    vals = (map fromJust (filter isJust 
+           (map (readMaybe :: String -> Maybe Int) consts)))
+    new_app = (foldr set app (zip const_sliders vals))
+    set = (\(pos, val) res -> replace_int pos (((elems res) !! pos) {s_curpt = val}) res)
 
 
 -- -с-п-а-с-е-н-и-е- сохранение мира в файл
-save_world :: Interface -> String -> IO ()
-save_world world file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (constants world)) ++ "\n" ++ (write_entities (entities world)))
+save_world :: Application -> String -> IO ()
+save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (get_sliders app)) ++ "\n" ++ (write_entities (entities world)))
+  where
+    world = (elems app) !! 0
+
+-- получить список позиций слайдеров с константами симуляции
+const_sliders :: [Int]
+const_sliders = [9, 11, 13, 15, 17, 19, 21]
+
+get_sliders :: Application -> [Int]
+get_sliders app = (foldr get [] const_sliders)
+  where
+    get = (\pos res -> ((s_curpt ((elems app) !! pos)) : res))
 
 write_color :: Color -> String
 write_color col = drop 5 (show col)
 
-write_f_list :: [Float] -> String
+write_f_list :: (Show a) => [a] -> String
 write_f_list list = foldr (++) "" (map ((++ " ") . show) list)
 
 write_entities :: [Entity] -> String

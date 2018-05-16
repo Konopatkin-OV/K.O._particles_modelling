@@ -3,11 +3,17 @@ module Particles where
 import BaseApp
 import AppFuncs
 import BaseClasses
+import Physics
 import Graphics.Gloss.Interface.IO.Game
- 
+
+
+-- слайдеры живут по индексам [9, 11, 13, 15, 17, 19, 21]
 run :: IO ()
-run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
-         let app = App {elems = [world, button_load, button_save, button_reload, 
+run = do app <- load_world "world.txt" init_app
+         playIO display white const_FPS app app_draw app_handle_events app_process 
+           where
+             display = (InWindow "Particles" (800, 900) (0, 0))
+             init_app = App {elems = [init_world, button_load, button_save, button_reload, 
                                  text_field_time, slider_time, button_go, button_pause,
                                  text_field_const_k, slider_const_k, text_field_const_p_0, slider_const_p_0,
                                  text_field_const_myu, slider_const_myu, text_field_const_sigma, slider_const_sigma,
@@ -16,9 +22,17 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  , button_shake -- костылики
                                 ], 
                         mouse_pos = (0, 0)}
-         playIO display white const_FPS app app_draw app_handle_events app_process 
-           where
-             display = (InWindow "Particles" (800, 900) (0, 0))
+             init_world = World {ibase = IBase {place = (-350, -380),
+                                                size = (400, 780),
+                                                action = action_pain,            --------------------------------------------
+                                                draw = draw_world,               --------------------------------------------
+                                                process = process_world}         --------------------------------------------
+                               , h_smooth = 10
+                               , entities = []
+                               , back_col = makeColor 0.5 0.5 0.5 1.0
+                               , time_speed = 1.0
+                               , is_pause = True
+                               , constants = base_consts}
 -----------------------------------------------------   кнопки загрузки/сохранения   ------------------------------------------
              b_l_base = IBase {place = (100, 290), 
                                size = (250, 50),
@@ -116,7 +130,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
 ------------------------------------------------------------------------------------------------------------------------------
 -----------------------------------------------------   манипуляции константами   --------------------------------------------
              text_field_const_k     = TextField {ibase = t_f_c_0_base,
-                                                 t_text = "Pressure: 2.5",
+                                                 t_text = "Pressure: 1.0",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_0_base = IBase {place = (100, 0),
@@ -146,7 +160,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  process = process_none}
 ----------------------------------------------------------------------------------
              text_field_const_p_0   = TextField {ibase = t_f_c_1_base,
-                                                 t_text = "Environment density: 2.5",
+                                                 t_text = "Environment density: 1.0",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_1_base = IBase {place = (100, -70),
@@ -160,7 +174,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                           s_min = 0,
                                           s_max = 50,
                                           s_pts = 51,
-                                          s_curpt = 5,
+                                          s_curpt = 10,
                                           s_col = (makeColor 0.5 0.5 0.5 1.0),
                                           s_sl_size = 10,
                                           s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
@@ -174,7 +188,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  process = process_none}
 ----------------------------------------------------------------------------------
              text_field_const_myu   = TextField {ibase = t_f_c_2_base,
-                                                 t_text = "Viscosity: 2.5",
+                                                 t_text = "Viscosity: 1.0",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_2_base = IBase {place = (100, -140),
@@ -203,7 +217,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  process = process_none}
 ----------------------------------------------------------------------------------
              text_field_const_sigma = TextField {ibase = t_f_c_3_base,
-                                                 t_text = "Tension: 2.5",
+                                                 t_text = "Tension: 1.0",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_3_base = IBase {place = (100, -210),
@@ -232,7 +246,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  process = process_none}
 ----------------------------------------------------------------------------------
              text_field_const_g     = TextField {ibase = t_f_c_4_base,
-                                                 t_text = "Gravity: 2.5",
+                                                 t_text = "Gravity: 1.0",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_4_base = IBase {place = (100, -280),
@@ -260,7 +274,7 @@ run = do world <- load_world 10 (-350, -380) (400, 780) "world.txt"
                                  process = process_none}
 ----------------------------------------------------------------------------------
              text_field_const_r     = TextField {ibase = t_f_c_5_base,
-                                                 t_text = "Border reflection: 0.1",
+                                                 t_text = "Border reflection: 0.2",
                                                  t_col = black,
                                                  t_scale = 0.15}
              t_f_c_5_base = IBase {place = (100, -350),
