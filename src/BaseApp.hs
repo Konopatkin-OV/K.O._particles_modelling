@@ -1,11 +1,11 @@
 module BaseApp where
 
 import Graphics.Gloss.Data.Point
-import Graphics.Gloss.Data.Vector
+--import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
-import Data.List (intercalate, sort)
+import Data.List (intercalate)
 import Data.Maybe (isJust, fromJust)
-import Debug.Trace
+--import Debug.Trace
 import Text.Read (readMaybe)
 
 import BaseClasses
@@ -30,8 +30,16 @@ app_handle_events (EventKey a b c (x, y)) app = (foldr (elem_action event) (retu
 
  
 elem_action :: Event -> Interface -> IO Application -> IO Application
-elem_action event element app = do cur_app <- app
-                                   (action (ibase element)) event cur_app
+elem_action event element app = if (is_active element) 
+                                then 
+                                  do cur_app <- app
+                                     (action (ibase element)) event cur_app
+                                else app
+
+-- игнорируем скрытость
+elem_action_all:: Event -> Interface -> IO Application -> IO Application
+elem_action_all event element app = do cur_app <- app
+                                       (action (ibase element)) event cur_app
 
 action_none :: Event -> Application -> IO Application
 action_none _ app = return app
@@ -74,15 +82,17 @@ check_pos base pos = pointInBox pos ld_corner ru_corner
     ru_corner = ld_corner + (size base)
 
 -- клик по элементу интерфейса
-action_click :: BaseInterface -> (Application -> IO Application) -> Event -> Application -> IO Application
-action_click base f (EventKey (MouseButton LeftButton) Down _ pos) app | check_pos base pos = f app
+action_click :: BaseInterface -> (Event -> Application -> IO Application) -> Event -> Application -> IO Application
+action_click base f (EventKey (MouseButton LeftButton) Down m pos) app | check_pos base pos = f event app
                                                                        | otherwise = return app
+  where
+     event = (EventKey (MouseButton LeftButton) Down m pos)
 action_click _ _ _ app = return app
 
 
 -- клик по кнопке
-action_button_click :: Int -> (Application -> IO Application) -> Application -> IO Application
-action_button_click num f app = f (replace_int num new_button app)
+action_button_click :: Int -> (Application -> IO Application) -> Event -> Application -> IO Application
+action_button_click num f _ app = f (replace_int num new_button app)
   where
     old_button = (elems app) !! num
     new_button = old_button {b_time = 0.0}
@@ -117,8 +127,8 @@ get_sl_pt sl pos = (max 0 (min ((s_pts sl) - 1) (round (x / d_pt))))
     d_pt = (sx - 2 * dx) / ((fromIntegral (s_pts sl)) - 1)
 
 
-action_load_world :: String -> Application -> IO Application
-action_load_world filename app = load_world filename app
+action_load_world :: Application -> IO Application
+action_load_world app = load_world (filename ((elems app) !! 0)) app
 --                                 do r_world <- load_world h_smooth_ place_ size_ filename
 --                                    return (replace_int 0 r_world app)
 --                                    where
@@ -127,9 +137,15 @@ action_load_world filename app = load_world filename app
 --                                      place_ = (place (ibase world))
 --                                      size_ = (size (ibase world))
 
-action_save_world :: String -> Application -> IO Application
-action_save_world filename app = do save_world app filename
-                                    return app
+action_save_world :: Application -> IO Application
+action_save_world app = do save_world app (filename ((elems app) !! 0))
+                           return app
+
+action_clear_world :: Application -> IO Application
+action_clear_world app = return (replace_int 0 new_world app)
+  where
+    new_world = ((elems app) !! 0) {entities = []}
+
 ------------------------------------------------------------------------
 
 -------------------------- отрисовка приложения ------------------------
@@ -139,7 +155,8 @@ app_draw app = return (scale c c (pictures (map elem_draw (elems app))))
     c = (app_scale app)
 
 elem_draw :: Interface -> Picture
-elem_draw element = (draw (ibase element)) $ element
+elem_draw element | (is_active element) = (draw (ibase element)) $ element
+                  | otherwise = Blank
 
 draw_none :: Interface -> Picture
 draw_none _ = Blank
@@ -188,10 +205,8 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
 draw_qtree _ (QLeaf []) = Blank
-draw_qtree coords (QLeaf p) = pictures (map 
+draw_qtree _ (QLeaf p) = pictures (map 
   (\ent -> (color red (translate (fst (e_pos ent)) (snd (e_pos ent)) (circleSolid 2)))) p)
-  where
-    ((x_l, y_d), (x_r, y_u)) = coords
 draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (x_m, y_u)]),
                                                   color red (Line [(x_l, y_m), (x_r, y_m)]),
                                                   draw_qtree ((x_l, y_m), (x_m, y_u)) ul,
@@ -205,9 +220,9 @@ draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (
 ------------------------------------------------------------------------
 
 
--- x, y = координаты частицы; r = радиус; c = цвет
+-- x, y = координаты частицы; <четвёртый "_"> r = радиус; c = цвет
 draw_entity :: Float -> Entity -> Picture
-draw_entity h (Particle (x, y) _ _ _ r c _) = pictures [color c (translate x y (circleSolid (h / 2))),
+draw_entity h (Particle (x, y) _ _ _ _ c _) = pictures [color c (translate x y (circleSolid (h / 2))),
                                             color (withAlpha 0.05 c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
@@ -222,14 +237,15 @@ app_process :: Float -> Application -> IO Application
 app_process time app = return (app {elems = map (elem_process time) (elems app)})
 
 elem_process :: Float -> Interface -> Interface
-elem_process time element = ((process (ibase element)) $ time) element
+elem_process time element | (is_active element) = ((process (ibase element)) $ time) element
+                          | otherwise = element
 
 process_none :: Float -> Interface -> Interface
 process_none _ element = element
 
 
 process_time :: Float -> Interface -> Interface
-process_time time (Button a b c d e t) = (Button a b c d e (t + time))
+process_time time (Button a b c d e t h) = (Button a b c d e (t + time) h)
 process_time _ elem_ = elem_
 
 
@@ -284,6 +300,11 @@ process_entity f_vic world time (Particle (x, y) (vx, vy) m p r c i) = Particle 
 
 ------------------------------------------------------------------------
 
+-- получить активные элементы интерфейса
+
+act_elems :: Application -> [Interface]
+act_elems app = filter (\a -> (is_active a)) (elems app)
+
 -- изменить один элемент интерфейса
 replace_int :: Int -> Interface -> Application -> Application
 replace_int n new app = app {elems = (take n el) ++ (new : (drop (n + 1) el))}
@@ -307,8 +328,8 @@ load_world file app =
           , time_speed = 1.0
           , is_pause = True
           , constants = base_consts}
-     let new_app = replace_int 0 new_world (load_sliders (strings !! 1) app)
-     return new_app
+     -- волшебный мегакостыль
+     trigger_sliders (replace_int 0 new_world (load_sliders (strings !! 1) app))
 
 
 load_particle :: Int -> [String] -> Maybe Entity
@@ -338,7 +359,7 @@ load_sliders consts app = if (length vals) == (length const_sliders) then new_ap
 
 -- -с-п-а-с-е-н-и-е- сохранение мира в файл
 save_world :: Application -> String -> IO ()
-save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (get_sliders app)) ++ "\n" ++ (write_entities (entities world)))
+save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (get_slider_vals app)) ++ "\n" ++ (write_entities (entities world)))
   where
     world = (elems app) !! 0
 
@@ -346,10 +367,20 @@ save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ 
 const_sliders :: [Int]
 const_sliders = [9, 11, 13, 15, 17, 19, 21]
 
-get_sliders :: Application -> [Int]
+get_slider_vals :: Application -> [Int]
+get_slider_vals app = map s_curpt (get_sliders app)
+
+get_sliders :: Application -> [Interface]
 get_sliders app = (foldr get [] const_sliders)
   where
-    get = (\pos res -> ((s_curpt ((elems app) !! pos)) : res))
+    get = (\pos res -> ((elems app) !! pos) : res)
+
+-- читерский пинок слайдеров
+trigger_sliders :: Application -> IO Application
+trigger_sliders app = (foldr (elem_action_all event) (return app) (get_sliders app))
+  where
+    event = (EventMotion (0, 0))
+-------------
 
 write_color :: Color -> String
 write_color col = drop 5 (show col)

@@ -1,10 +1,10 @@
 module AppFuncs where
 
-import Graphics.Gloss.Data.Point
-import Graphics.Gloss.Data.Vector
+--import Graphics.Gloss.Data.Point
+--import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
 import Text.Printf
-import Debug.Trace
+--import Debug.Trace
 
 import BaseClasses
 import BaseApp
@@ -58,6 +58,11 @@ action_set_world_h f _ app = return (replace_int 0 new_world app)
   where
     new_world = ((elems app) !! 0) {h_smooth = f app}
 
+action_set_world_file :: (Application -> String) -> Event -> Application -> IO Application
+action_set_world_file f _ app = return (replace_int 0 new_world app)
+  where
+    new_world = ((elems app) !! 0) {filename = f app}
+
 action_set_world_const :: Int -> (Application -> Float) -> Event -> Application -> IO Application
 action_set_world_const num f _ app = return (replace_int 0 new_world app)
   where
@@ -87,3 +92,24 @@ f_shake ent (res, n) = ((new_ent : res), n + 1)
 replace_elem :: Int -> a -> [a] -> [a]
 replace_elem n x list | (length list > n) = (take n list) ++ (x : (drop (n + 1) list))
                       | otherwise = list
+
+------------------------------------------------------------------------------------------
+
+-- задать параметр скрытости элементам интерфейса
+action_set_page :: [Bool] -> Event -> Application -> IO Application
+action_set_page flags _ app = return app {elems = new_elems}
+  where
+    new_elems = zipWith set (elems app) flags
+    set = (\int act -> int {is_active = act})
+
+-- задать время после клика нужным кнопкам (костыль зажатых/отжатых кнопок переключения страниц)
+action_set_buttons_time :: Float -> [Int] -> Event -> Application -> IO Application
+action_set_buttons_time time indexes _ app = return new_app
+  where
+    new_app = foldr (set_button_time time) app indexes
+
+set_button_time :: Float -> Int -> Application -> Application
+set_button_time time index app = new_app
+  where
+    new_app = replace_int index new_button app
+    new_button = ((elems app) !! index) {b_time = time}
