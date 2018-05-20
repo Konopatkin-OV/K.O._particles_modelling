@@ -1,13 +1,14 @@
 module AppFuncs where
 
---import Graphics.Gloss.Data.Point
---import Graphics.Gloss.Data.Vector
+import Graphics.Gloss.Data.Point
+import Graphics.Gloss.Data.Vector
 import Graphics.Gloss.Interface.IO.Game
 import Text.Printf
 --import Debug.Trace
 
 import BaseClasses
 import BaseApp
+import Physics
 
 
 -- новый текст получаем по состоянию приложения (из какого-нибудь слайдера)
@@ -78,10 +79,10 @@ action_shake_world app = return new_app
     new_app = replace_int 0 new_world app
     world = head (elems app)
     new_world = world {entities = shaken}
-    (shaken, _) = foldr f_shake ([], 0) (entities world)
+    shaken = zipWith f_shake (entities world) [0..]
 
-f_shake :: Entity -> ([Entity], Int) -> ([Entity], Int)
-f_shake ent (res, n) = ((new_ent : res), n + 1)
+f_shake :: Entity -> Int -> Entity
+f_shake ent n = new_ent
   where
     (x, y) = (e_pos ent)
     shift = const_EPS * (fromIntegral n)
@@ -113,3 +114,60 @@ set_button_time time index app = new_app
   where
     new_app = replace_int index new_button app
     new_button = ((elems app) !! index) {b_time = time}
+
+--------------------------------------------------------------
+
+-- клик по миру: создаёт/удаляет частицы в радиусе от точки клика
+action_edit :: Event -> Application -> IO Application
+action_edit (EventKey (MouseButton LeftButton) Down _ pos) app | check_pos (ibase old_world) pos = return (replace_int 0 new_world app)
+                                                               | otherwise = return app
+  where
+    old_world = (elems app) !! 0
+    act = (action_type old_world)
+    tmp_world = (old_world {m_act = True, m_pos = pos})
+    new_world | (act == 1) = add_blob tmp_world
+              | otherwise = edit_world tmp_world
+action_edit (EventMotion pos) app = return new_app
+  where
+    new_app = (replace_int 0 (edit_world (((elems app) !! 0) {m_pos = pos})) app)
+action_edit (EventKey (MouseButton LeftButton) Up _ _) app = return (replace_int 0 new_world app)
+  where
+    new_world = edit_world (((elems app) !! 0) {m_act = False})
+action_edit _ app = return app
+
+-- замощение шестиугольниками (треугольниками) из точек
+add_blob :: Interface -> Interface
+add_blob world = new_world
+  where
+    new_world = world {entities = (entities world) ++ blob}
+    blob = (make_blob (new_particle world) pos (h_smooth world) (edit_radius world))
+    pos = (m_pos world) - (place (ibase world))
+
+make_blob :: Entity -> Point -> Float -> Float -> [Entity]
+make_blob samp pos h r = filter (\ent -> ((dist (e_pos ent) pos) <= r)) blob
+  where
+    dirs = [( 1.0, 0.0), ( 0.5,  sqrt(3.0) / 2.0), (-0.5,  sqrt(3.0) / 2), 
+            (-1.0, 0.0), (-0.5, -sqrt(3.0) / 2.0), ( 0.5, -sqrt(3.0) / 2)]
+    blob = ((samp {e_pos = pos}) : foldr (++) [] (map (make_circle samp pos dirs h) 
+                                                 ([1..(ceiling (r / (0.9 * h) / (sqrt(3.0) / 2.0)))] :: [Int])))
+
+make_circle :: Entity -> Point -> [Vector] -> Float -> Int -> [Entity]
+make_circle samp (x_0, y_0) dirs h n = circle
+  where
+    n_f = (fromIntegral n)
+    pts = map (\(x, y) -> (x_0 + x * h * n_f * 0.9, y_0 + y * h * n_f * 0.9)) dirs
+    segms = zipWith (,) pts ((tail pts) ++ [(head pts)])
+    circle = foldr (++) [] (map (make_segm samp n) segms)
+
+make_segm :: Entity -> Int -> (Point, Point) -> [Entity]
+make_segm samp n ((x_1, y_1), (x_2, y_2)) = map put [0..(n - 1)]
+  where
+    dx = (x_2 - x_1) / (fromIntegral n)
+    dy = (y_2 - y_1) / (fromIntegral n)
+    put = (\k -> samp {e_pos = (x_1 + (fromIntegral k) * dx, 
+                                y_1 + (fromIntegral k) * dy)})
+
+
+-- нафиг оно оказалось не нужно
+numerate_particles :: Int -> [Entity] -> [Entity]
+numerate_particles n pts = zipWith (\ent k -> ent {e_id = k}) pts [n..]

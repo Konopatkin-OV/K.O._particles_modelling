@@ -53,27 +53,6 @@ do_action func app = do cur_app <- app
                         func cur_app
 
 
--- клик по миру: создаёт новую частицу в точке клика, которая летит в центр мира
-action_pain :: Event -> Application -> IO Application
-action_pain (EventKey (MouseButton LeftButton) Down _ pos) app | pointInBox pos w_place (w_place + w_size) = return (replace_int 0 new_world app)
-                                                               | otherwise = return app
-  where
-    new_world = old_world {entities = (new_particle : (entities old_world))}
-    old_world = (elems app) !! 0     -- считаем, что мир - нулевой интерфейс приложения
-    new_particle = Particle {e_pos = w_pos,
-                             e_speed = (0, 0), -- (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
-                             e_mass = 1,
-                             e_dense = 1.0, -- само пусть считается
-                             e_radius = 20,
-                             e_color = makeColor 0.0 0.0 0.6 1.0,
-                             e_id = length (entities old_world)}
-    w_place = (place (ibase old_world))
-    w_size = (size (ibase old_world))
-    w_pos = pos - (place (ibase old_world)) -- положение указателя относительно мира
-    --wx = (fst (size (ibase old_world))) / 2
-    --wy = (snd (size (ibase old_world))) / 2
-action_pain _ app = return app
-
 -- проверка попадания точки в интерфейс
 check_pos :: BaseInterface -> Point -> Bool
 check_pos base pos = pointInBox pos ld_corner ru_corner
@@ -144,7 +123,7 @@ action_save_world app = do save_world app (filename ((elems app) !! 0))
 action_clear_world :: Application -> IO Application
 action_clear_world app = return (replace_int 0 new_world app)
   where
-    new_world = ((elems app) !! 0) {entities = []}
+    new_world = ((elems app) !! 0) {entities = [], is_pause = True}
 
 ------------------------------------------------------------------------
 
@@ -193,7 +172,8 @@ draw_slider sl = translate (x + sx / 2) (y + sy / 2) (pictures [color cur_col (r
 
 draw_world :: Interface -> Picture
 draw_world world = translate x y (pictures [color (back_col world) (polygon [(0, 0), (0, sy), (sx, sy), (sx, 0)]),
-                                           (pictures (map (draw_entity (h_smooth world)) (entities world)))
+                                           (pictures (map (draw_entity (h_smooth world)) (entities world))),
+                                           draw_target world
                                            --, (draw_qtree coords qtree)
                                            ])
   where
@@ -201,6 +181,16 @@ draw_world world = translate x y (pictures [color (back_col world) (polygon [(0,
     (sx, sy) = (size (ibase world))
     --coords = ((0, 0), (sx, sy))
     --qtree = foldr (qtr_insert coords (h_smooth world)) (QLeaf []) (entities world)
+
+draw_target :: Interface -> Picture
+draw_target world | check_pos (ibase world) (x, y) = translate dx dy (color col (circle r))
+                  | otherwise = Blank
+  where
+    (x, y) = (m_pos world)
+    (dx, dy) = (m_pos world) - (place (ibase world))
+    r = (edit_radius world)
+    act = (action_type world)
+    col = if (act /= 1) && (m_act world) then green else red
 
 --------------------- костыль для тестирования -------------------------
 draw_qtree :: (Point, Point) -> QuadTree -> Picture
@@ -250,8 +240,7 @@ process_time _ elem_ = elem_
 
 
 process_world :: Float -> Interface -> Interface
-process_world time world | (not (is_pause world)) = --trace (if test_vic /= test_vic_old then ((show test_vic) ++ " | " ++ (show test_vic_old) ++ "\n") else "")
-                           (tmp_world { entities = (map (process_entity f_vic_1 tmp_world dt) (entities tmp_world))})
+process_world time world | (not (is_pause world)) = edit_world new_world
                          | otherwise = world
   where
     h = (h_smooth world)
@@ -265,6 +254,8 @@ process_world time world | (not (is_pause world)) = --trace (if test_vic /= test
     qtree_1 = foldr (qtr_insert coords (h * const_tree_size)) (QLeaf []) (entities tmp_world)
     f_vic_1 = (qtr_get_vicinity coords qtree_1 h [])
     --f_vic_1 = (get_vicinity tmp_world h)
+    new_world = (tmp_world { entities = (map (process_entity f_vic_1 tmp_world dt) (entities tmp_world))})
+    --trace (if test_vic /= test_vic_old then ((show test_vic) ++ " | " ++ (show test_vic_old) ++ "\n") else "")
 
     coords = ((0, 0), (size (ibase world)))
 
@@ -272,6 +263,31 @@ process_world time world | (not (is_pause world)) = --trace (if test_vic /= test
     --test_vic_old = sort (map e_id (f_vic_0_old (390, 10)))
     --test_len = (length test_vic)
     --test_len_old = (length test_vic_old)
+
+-- взаимодействие пользователя с миром
+edit_world :: Interface -> Interface
+edit_world world | ((check_pos (ibase world) (m_pos world)) && (m_act world)) = new_world
+                 | otherwise = world
+  where
+    new_world = world {entities = new_entities}
+    old_entities = entities world
+    r = edit_radius world
+    act = (action_type world)
+    new_entities | (act == 0) = filter (\ent -> ((dist (e_pos ent) w_pos) > r)) old_entities
+                 | otherwise = old_entities
+    new_particle = Particle {e_pos = w_pos,
+                             e_speed = (0, 0), -- (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
+                             e_mass = 1,
+                             e_dense = 1.0, -- само пусть считается
+                             e_radius = 20,
+                             e_color = makeColor 0.0 0.0 0.6 1.0,
+                             e_id = length (entities world)}
+    w_place = (place (ibase world))
+    w_size = (size (ibase world))
+    w_pos = (m_pos world) - w_place -- положение указателя относительно мира
+    --wx = (fst (size (ibase world))) / 2
+    --wy = (snd (size (ibase world))) / 2
+
 
 refresh_density :: (Point -> [Entity]) -> Interface -> Entity -> Entity
 refresh_density f_vic world ent = ent {e_dense = density world {entities = vicinity} pos}
@@ -365,7 +381,7 @@ save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ 
 
 -- получить список позиций слайдеров с константами симуляции
 const_sliders :: [Int]
-const_sliders = [9, 11, 13, 15, 17, 19, 21]
+const_sliders = [14, 16, 18, 20, 22, 24, 26]
 
 get_slider_vals :: Application -> [Int]
 get_slider_vals app = map s_curpt (get_sliders app)
