@@ -212,8 +212,8 @@ draw_qtree coords (QNode ul ur dl dr) = pictures [color red (Line [(x_m, y_d), (
 
 -- x, y = координаты частицы; <четвёртый "_"> r = радиус; c = цвет
 draw_entity :: Float -> Entity -> Picture
-draw_entity h (Particle (x, y) _ _ _ _ c _) = pictures [color c (translate x y (circleSolid (h / 2))),
-                                            color (withAlpha 0.05 c) (translate x y (circleSolid h))]
+draw_entity h (Particle (x, y) _ m _ _ c _) = pictures [color c (translate x y (circleSolid (h / 2))),
+                                            color (withAlpha (0.05 * m) c) (translate x y (circleSolid h))]
                                           -- color c (translate x y (circleSolid r))
 --draw_entity _ = Blank
 
@@ -225,6 +225,7 @@ text_ s txt = translate (-35 * s * fromIntegral (length txt)) (-50 * s) (scale s
 -------------------------- обработчик времени --------------------------
 app_process :: Float -> Application -> IO Application
 app_process time app = return (app {elems = map (elem_process time) (elems app)})
+
 
 elem_process :: Float -> Interface -> Interface
 elem_process time element | (is_active element) = ((process (ibase element)) $ time) element
@@ -244,7 +245,8 @@ process_world time world | (not (is_pause world)) = edit_world new_world
                          | otherwise = world
   where
     h = (h_smooth world)
-    dt = (time * (time_speed world))
+    delta = (min time (1.0 / (fromIntegral const_FPS)))
+    dt = (delta * (time_speed world))
 
     qtree_0 = foldr (qtr_insert coords (h * const_tree_size)) (QLeaf []) (entities world)
     f_vic_0 = (qtr_get_vicinity coords qtree_0 h [])
@@ -275,15 +277,15 @@ edit_world world | ((check_pos (ibase world) (m_pos world)) && (m_act world)) = 
     act = (action_type world)
     new_entities | (act == 0) = filter (\ent -> ((dist (e_pos ent) w_pos) > r)) old_entities
                  | otherwise = old_entities
-    new_particle = Particle {e_pos = w_pos,
-                             e_speed = (0, 0), -- (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
-                             e_mass = 1,
-                             e_dense = 1.0, -- само пусть считается
-                             e_radius = 20,
-                             e_color = makeColor 0.0 0.0 0.6 1.0,
-                             e_id = length (entities world)}
+   -- new_particle = Particle {e_pos = w_pos,
+   --                          e_speed = (0, 0), -- (mulSV (-0.5 * 0.0001) (2 * w_pos - w_size)),
+   --                          e_mass = 1,
+   --                          e_dense = 1.0, -- само пусть считается
+   --                          e_radius = 20,
+   --                          e_color = makeColor 0.0 0.0 0.6 1.0,
+   --                          e_id = length (entities world)}
     w_place = (place (ibase world))
-    w_size = (size (ibase world))
+   -- w_size = (size (ibase world))
     w_pos = (m_pos world) - w_place -- положение указателя относительно мира
     --wx = (fst (size (ibase world))) / 2
     --wy = (snd (size (ibase world))) / 2

@@ -17,19 +17,21 @@ inf_false = (False : inf_false)
 
 -- распределение элементов интерфейса по "страницам"
 page_save_load :: [Bool]
-page_save_load = (take 9 inf_true) ++ (take 18 inf_false) ++ [True, True, False] ++ inf_true
+page_save_load = (take 9 inf_true) ++ (take 18 inf_false) ++ [True, True, False] ++ inf_false
 
 page_physics :: [Bool]
-page_physics = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 18 inf_true) ++ (take 3 inf_false) ++ inf_true
+page_physics = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 18 inf_true) ++ inf_false
 
---page_editor :: [Bool]
+page_editor :: [Bool]
+page_editor = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 16 inf_false) ++ (take 7 inf_true) ++ inf_false
 
---page_world :: [Bool]
+page_world :: [Bool]
+page_world = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 16 inf_false) ++ inf_false
 
 -- слайдеры живут по индексам [9, 11, 13, 15, 17, 19, 21]
 run :: IO ()
 run = do app <- load_world "worlds/world_01.txt" init_app
-         playIO display white const_FPS app app_draw app_handle_events app_process 
+         playIO display (makeColor 0.9 0.9 0.9 1.0) const_FPS app app_draw app_handle_events app_process 
            where
              display = (InWindow "Particles" (1200, 900) (0, 0))
              init_app = App {elems = [init_world
@@ -41,7 +43,14 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                  text_field_const_myu, slider_const_myu, text_field_const_sigma, slider_const_sigma,
                                  text_field_const_g, slider_const_g, text_field_const_r, slider_const_r,
                                  text_field_const_h, slider_const_h,
-                                 text_field_filename, slider_filename
+                                 text_field_filename, slider_filename,
+                                 button_spawn, button_erase,
+                                 text_field_edit_r, slider_edit_r,
+                                 text_field_p_param,
+                                 text_field_edit_m, slider_edit_m
+
+
+
                                  , button_shake -- костыльное расклеивание частиц
                                 ], 
                         app_scale = 1.0, 
@@ -59,10 +68,10 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                , time_speed = 1.0
                                , is_pause = True
                                , constants = base_consts
-                               , filename = "world_1.txt"
+                               , filename = "world_01.txt"
                                , is_active = True
 
-                               , edit_radius = 100.0
+                               , edit_radius = 10.0
                                , new_particle = Particle {
                                               e_pos = (0, 0),
                                               e_speed = (0, 0),
@@ -426,7 +435,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
 ------------------------------------------------------------------------------------------------------------------------------
 
              text_field_filename = TextField {ibase = t_f_fn_base,
-                                              t_text = "Filename: world_1.txt",
+                                              t_text = "Filename: world_01.txt",
                                               t_col = black,
                                               t_scale = 0.16,
                                               is_active = True}
@@ -457,6 +466,123 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                draw = draw_slider,
                                process = process_none
                               }
+
+------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------  редактор частиц --------------------------------------------------
+
+             b_spawn_base = IBase {place = (50, 65), 
+                                   size = (140, 50),
+                                   action = (action_click b_spawn_base (action_multi [
+                                             action_set_world_action (\_ -> 1),
+                                             action_set_buttons_time 0.0 [29],
+                                             action_set_buttons_time 1.0 [30]
+                                             ])),
+                                   draw = draw_button,
+                                   process = process_none
+                                }
+             button_spawn = Button {ibase = b_spawn_base,
+                                    b_text = "Spawn",
+                                    b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                    b_click_col = (makeColor 0.1 0.7 0.1 1.0),
+                                    b_text_col = black,
+                                    b_time = 0.0,
+                                    is_active = False}
+
+             b_erase_base = IBase {place = (210, 65), 
+                                   size = (140, 50),
+                                   action = (action_click b_erase_base (action_multi [
+                                             action_set_world_action (\_ -> 0),
+                                             action_set_buttons_time 0.0 [30],
+                                             action_set_buttons_time 1.0 [29]
+                                             ])),
+                                   draw = draw_button,
+                                   process = process_none
+                                   }
+             button_erase = Button {ibase = b_erase_base,
+                                    b_text = "Erase",
+                                    b_col = (makeColor 0.5 0.5 0.5 1.0),
+                                    b_click_col = (makeColor 0.1 0.7 0.1 1.0),
+                                    b_text_col = black,
+                                    b_time = 1.0,
+                                    is_active = False}
+
+---------------------------------------------------------------------------------
+             text_field_edit_r     = TextField {ibase = t_f_e_r_base,
+                                                t_text = "Brush radius: 10",
+                                                t_col = black,
+                                                t_scale = 0.15,
+                                                is_active = False}
+             t_f_e_r_base = IBase {place = (50, 170),
+                                   size = (300, 30),
+                                   action = action_none,
+                                   draw = draw_text_field,
+                                   process = process_none
+                                  }
+
+             slider_edit_r     = Slider {ibase = s_e_r_base,
+                                         s_indent = (10, 3),
+                                         s_min = 1,
+                                         s_max = 50,
+                                         s_pts = 50,
+                                         s_curpt = 9,
+                                         s_col = (makeColor 0.5 0.5 0.5 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_e_r_base = IBase {place = (50, 130),
+                                 size = (300, 40),
+                                 action = action_multi [(action_set_world_edit_rad ((* 1) . (get_slider_val 32))),
+                                                        (action_change_text 31 (slider_to_text 32 (* 1) "Brush radius: %.0f")),
+                                                        (action_slider 32)],
+                                 draw = draw_slider,
+                                 process = process_none
+                                }
+---------------------------------------------------------------------------------
+             text_field_p_param    = TextField {ibase = t_f_p_p_base,
+                                                t_text = "Particle parametres:",
+                                                t_col = black,
+                                                t_scale = 0.18,
+                                                is_active = False}
+             t_f_p_p_base = IBase {place = (50, 10),
+                                   size = (300, 30),
+                                   action = action_none,
+                                   draw = draw_text_field,
+                                   process = process_none
+                                  }
+
+             text_field_edit_m     = TextField {ibase = t_f_e_m_base,
+                                                t_text = "Mass: 1.0",
+                                                t_col = black,
+                                                t_scale = 0.15,
+                                                is_active = False}
+             t_f_e_m_base = IBase {place = (50, -40),
+                                   size = (100, 30),
+                                   action = action_none,
+                                   draw = draw_text_field,
+                                   process = process_none
+                                  }
+
+             slider_edit_m     = Slider {ibase = s_e_m_base,
+                                         s_indent = (10, 3),
+                                         s_min = 1,
+                                         s_max = 50,
+                                         s_pts = 50,
+                                         s_curpt = 9,
+                                         s_col = (makeColor 0.5 0.5 0.5 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_e_m_base = IBase {place = (160, -40),
+                                 size = (140, 40),
+                                 action = action_multi [(action_change_world_spawn_particle 
+                                          (\app ent -> (ent {e_mass = (0.1 * (get_slider_val 35 app))}))),
+                                                        (action_change_text 34 (slider_to_text 35 (* 0.1) "Mass: %.1f")),
+                                                        (action_slider 35)],
+                                 draw = draw_slider,
+                                 process = process_none
+                                }
 
 ------------------------------------------------------------------------------------------------------------------------------
 -------------------------------------------  переключения между "страницами" интерфейса --------------------------------------
@@ -499,7 +625,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
              b_p_3_base = IBase {place = (400, 230), 
                                  size = (150, 50),
                                  action = (action_click b_p_3_base (action_multi [
-                                           action_set_page page_save_load,
+                                           action_set_page page_editor,
                                            action_set_buttons_time 0.0 [3],
                                            action_set_buttons_time 1.0 [1, 2, 4]
                                            ])),
@@ -517,7 +643,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
              b_p_4_base = IBase {place = (400, 170), 
                                  size = (150, 50),
                                  action = (action_click b_p_4_base (action_multi [
-                                           action_set_page page_physics,
+                                           action_set_page page_world,
                                            action_set_buttons_time 0.0 [4],
                                            action_set_buttons_time 1.0 [1, 2, 3]
                                            ])),
@@ -540,7 +666,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                              }
              button_menu_bckg = Button {ibase = b_bckg,
                                         b_text = "",
-                                        b_col = (makeColor 0.9 0.9 1.0 1.0),
+                                        b_col = (makeColor 0.85 0.85 0.85 1.0),
                                         b_click_col = (makeColor 0.1 0.5 0.1 1.0),
                                         b_text_col = (makeColor 0.1 0.5 0.1 1.0),
                                         b_time = 0.0,

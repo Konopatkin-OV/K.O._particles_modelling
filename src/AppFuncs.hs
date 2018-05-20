@@ -64,6 +64,23 @@ action_set_world_file f _ app = return (replace_int 0 new_world app)
   where
     new_world = ((elems app) !! 0) {filename = f app}
 
+action_set_world_edit_rad :: (Application -> Float) -> Event -> Application -> IO Application
+action_set_world_edit_rad f _ app = return (replace_int 0 new_world app)
+  where
+    new_world = ((elems app) !! 0) {edit_radius = f app}
+
+action_set_world_action :: (Application -> Int) -> Event -> Application -> IO Application
+action_set_world_action f _ app = return (replace_int 0 new_world app)
+  where
+    new_world = ((elems app) !! 0) {action_type = f app}
+
+action_change_world_spawn_particle :: (Application -> Entity -> Entity) -> Event -> Application -> IO Application
+action_change_world_spawn_particle f _ app = return (replace_int 0 new_world app)
+  where
+    world = ((elems app) !! 0)
+    new_world = world {new_particle = (f app (new_particle world))}
+-- много копипаста, если обобщить - забьётся определение функций в Particles.hs
+
 action_set_world_const :: Int -> (Application -> Float) -> Event -> Application -> IO Application
 action_set_world_const num f _ app = return (replace_int 0 new_world app)
   where
@@ -85,8 +102,8 @@ f_shake :: Entity -> Int -> Entity
 f_shake ent n = new_ent
   where
     (x, y) = (e_pos ent)
-    shift = const_EPS * (fromIntegral n)
-    new_ent = ent {e_pos = (x + shift, y + shift)}
+    delta = const_EPS * (fromIntegral n)
+    new_ent = ent {e_pos = (x + delta, y + delta)}
     const_EPS = 0.001
 
 -- может ещё где-нибудь пригодится, из встроенных есть модуль lens со стрёмным синтаксисом
@@ -152,12 +169,12 @@ make_blob samp pos h r = filter (\ent -> ((dist (e_pos ent) pos) <= r)) blob
                                                  ([1..(ceiling (r / (0.9 * h) / (sqrt(3.0) / 2.0)))] :: [Int])))
 
 make_circle :: Entity -> Point -> [Vector] -> Float -> Int -> [Entity]
-make_circle samp (x_0, y_0) dirs h n = circle
+make_circle samp (x_0, y_0) dirs h n = res
   where
     n_f = (fromIntegral n)
     pts = map (\(x, y) -> (x_0 + x * h * n_f * 0.9, y_0 + y * h * n_f * 0.9)) dirs
     segms = zipWith (,) pts ((tail pts) ++ [(head pts)])
-    circle = foldr (++) [] (map (make_segm samp n) segms)
+    res = foldr (++) [] (map (make_segm samp n) segms)
 
 make_segm :: Entity -> Int -> (Point, Point) -> [Entity]
 make_segm samp n ((x_1, y_1), (x_2, y_2)) = map put [0..(n - 1)]
