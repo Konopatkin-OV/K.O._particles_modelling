@@ -673,14 +673,14 @@ run = do app <- load_world "worlds/world_01.txt" init_app
 --------------------------------------------------------  свойства мира   ----------------------------------------------------
 
              text_field_w_color    = TextField {ibase = t_f_w_c_base,
-                                                t_text = "Color: (0, 0, 153)",
+                                                t_text = "Background: (0, 0, 153)",
                                                 t_col = black,
                                                 t_scale = 0.15,
                                                 is_active = False}
-             t_f_w_c_base = IBase {place = (20, -80),
+             t_f_w_c_base = IBase {place = (50, 170),
                                    size = (300, 30),
                                    action = (action_multi [
-                                    action_change_text 41 ((color_to_text "Color: (%d, %d, %d)") . (get_triple_from_sliders [42, 43, 44])),
+                                    action_change_text 41 ((color_to_text "Background: (%d, %d, %d)") . (get_triple_from_sliders [42, 43, 44])),
                                     action_set_world_color (get_color_from_sliders [42, 43, 44])
                                     ]),
                                    draw = draw_text_field,
@@ -698,7 +698,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                          s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
                                          s_m_act = False,
                                          is_active = False}
-             s_w_c_r_base = IBase {place = (50, -130),
+             s_w_c_r_base = IBase {place = (50, 120),
                                    size = (300, 40),
                                    action = (action_slider 42),
                                    draw = draw_slider,
@@ -716,7 +716,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                          s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
                                          s_m_act = False,
                                          is_active = False}
-             s_w_c_g_base = IBase {place = (50, -180),
+             s_w_c_g_base = IBase {place = (50, 70),
                                    size = (300, 40),
                                    action = (action_slider 43),
                                    draw = draw_slider,
@@ -734,7 +734,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                          s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
                                          s_m_act = False,
                                          is_active = False}
-             s_w_c_b_base = IBase {place = (50, -230),
+             s_w_c_b_base = IBase {place = (50, 20),
                                    size = (300, 40),
                                    action = (action_slider 44),
                                    draw = draw_slider,

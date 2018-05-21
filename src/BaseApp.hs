@@ -422,9 +422,9 @@ write_f_list :: (Show a) => [a] -> String
 write_f_list list = foldr (++) "" (map ((++ " ") . show) list)
 
 write_entities :: [Entity] -> String
-write_entities ents = foldr write_next_entity "" ents
+write_entities ents = foldl write_next_entity "" ents
 
 -- страшная строчка
-write_next_entity :: Entity -> String -> String
-write_next_entity (Particle (x, y) (vx, vy) m _ r col _) buf = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
+write_next_entity :: String -> Entity -> String
+write_next_entity buf (Particle (x, y) (vx, vy) m _ r col _) = buf ++ "\n" ++ (intercalate " " (map show [x, y, vx, vy, m, r])) ++ " " ++ (write_color col)
 --write_next_entity _ buf = buf
