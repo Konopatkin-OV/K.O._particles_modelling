@@ -21,6 +21,26 @@ action_change_text num f _ app = return (replace_int num new_text_field app)
     old_text_field = ((elems app) !! num)
     new_text_field = old_text_field {t_text = (f app)}
 
+get_triple_from_sliders :: [Int] -> Application -> (Int, Int, Int)
+get_triple_from_sliders [nr, ng, nb] app = (r, g, b)
+  where
+    r = (s_curpt ((elems app) !! nr))
+    g = (s_curpt ((elems app) !! ng))
+    b = (s_curpt ((elems app) !! nb))
+get_triple_from_sliders _ _ = (0, 0, 0)
+
+get_color_from_sliders :: [Int] -> Application -> Color
+get_color_from_sliders sl app = res
+  where
+    (r, g, b) = get_triple_from_sliders sl app
+    fr = ((fromIntegral r) / 255.0)
+    fg = ((fromIntegral g) / 255.0)
+    fb = ((fromIntegral b) / 255.0)
+    res = makeColor fr fg fb 1.0 
+
+color_to_text :: String -> (Int, Int, Int) -> String
+color_to_text fmt (r, g, b) = printf fmt r g b
+
 slider_to_text :: Int -> (Float -> Float) -> String -> Application -> String
 slider_to_text num func fmt app = printf fmt (func (s_value sl))
   where
@@ -41,6 +61,19 @@ action_change_time_text num f _ app = return (replace_int num new_text_field app
     new_text_field = old_text_field {t_text = if (is_pause ((elems app) !! 0)) 
                                               then ((f app) ++ " (paused)") -- костылик
                                               else (f app)}
+
+-- поменять цвет какой-нибудь кнопки (мб стоило всем элементам интерфейса основной цвет назвать одним именем)
+action_set_button_color :: Int -> (Application -> Color) -> Event -> Application -> IO Application
+action_set_button_color num f _ app = return (replace_int num new_button app)
+  where 
+    old_button = ((elems app) !! num)
+    new_button = old_button {b_col = (f app)}
+
+action_set_world_color :: (Application -> Color) -> Event -> Application -> IO Application
+action_set_world_color f _ app = return (replace_int 0 new_button app)
+  where 
+    old_button = ((elems app) !! 0)
+    new_button = old_button {back_col = (f app)}
 
 -- для кнопок => без Event-а
 action_set_world_pause :: Bool -> Application -> IO Application

@@ -23,10 +23,10 @@ page_physics :: [Bool]
 page_physics = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 18 inf_true) ++ inf_false
 
 page_editor :: [Bool]
-page_editor = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 16 inf_false) ++ (take 7 inf_true) ++ inf_false
+page_editor = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 16 inf_false) ++ (take 12 inf_true) ++ inf_false
 
 page_world :: [Bool]
-page_world = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 16 inf_false) ++ inf_false
+page_world = (take 6 inf_true) ++ (take 3 inf_false) ++ (take 4 inf_true) ++ (take 28 inf_false) ++ (take 4 inf_true) ++ inf_false
 
 -- слайдеры живут по индексам [9, 11, 13, 15, 17, 19, 21]
 run :: IO ()
@@ -47,8 +47,9 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                  button_spawn, button_erase,
                                  text_field_edit_r, slider_edit_r,
                                  text_field_p_param,
-                                 text_field_edit_m, slider_edit_m
-
+                                 text_field_edit_m, slider_edit_m,
+                                 text_field_p_color, slider_edit_c_r, slider_edit_c_g, slider_edit_c_b, button_edit_color,
+                                 text_field_w_color, slider_world_c_r, slider_world_c_g, slider_world_c_b
 
 
                                  , button_shake -- костыльное расклеивание частиц
@@ -575,7 +576,7 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                          s_m_act = False,
                                          is_active = False}
              s_e_m_base = IBase {place = (160, -40),
-                                 size = (140, 40),
+                                 size = (190, 40),
                                  action = action_multi [(action_change_world_spawn_particle 
                                           (\app ent -> (ent {e_mass = (0.1 * (get_slider_val 35 app))}))),
                                                         (action_change_text 34 (slider_to_text 35 (* 0.1) "Mass: %.1f")),
@@ -583,6 +584,162 @@ run = do app <- load_world "worlds/world_01.txt" init_app
                                  draw = draw_slider,
                                  process = process_none
                                 }
+---------------------------------------------------------------------------------
+             text_field_p_color    = TextField {ibase = t_f_p_c_base,
+                                                t_text = "Color: (0, 0, 153)",
+                                                t_col = black,
+                                                t_scale = 0.15,
+                                                is_active = False}
+             t_f_p_c_base = IBase {place = (20, -80),
+                                   size = (300, 30),
+                                   action = (action_multi [
+                                    action_change_text 36 ((color_to_text "Color: (%d, %d, %d)") . (get_triple_from_sliders [37, 38, 39])),
+                                    action_change_world_spawn_particle
+                                    (\app ent -> ent {e_color = (get_color_from_sliders [37, 38, 39] app)})
+                                    ]),
+                                   draw = draw_text_field,
+                                   process = process_none
+                                  }
+
+             slider_edit_c_r   = Slider {ibase = s_e_c_r_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 0,
+                                         s_col = (makeColor 0.6 0.0 0.0 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_e_c_r_base = IBase {place = (50, -130),
+                                   size = (300, 40),
+                                   action = (action_slider 37),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
+
+             slider_edit_c_g   = Slider {ibase = s_e_c_g_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 0,
+                                         s_col = (makeColor 0.0 0.6 0.0 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_e_c_g_base = IBase {place = (50, -180),
+                                   size = (300, 40),
+                                   action = (action_slider 38),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
+
+             slider_edit_c_b   = Slider {ibase = s_e_c_b_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 153,
+                                         s_col = (makeColor 0.0 0.0 0.6 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_e_c_b_base = IBase {place = (50, -230),
+                                   size = (300, 40),
+                                   action = (action_slider 39),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
+
+             b_edit_color_base = IBase {place = (320, -80), 
+                                        size = (30, 30),
+                                        action = (action_set_button_color 40 (get_color_from_sliders [37, 38, 39])),
+                                        draw = draw_button,
+                                        process = process_time
+                                       }
+             button_edit_color = Button {ibase = b_edit_color_base,
+                                         b_text = "",
+                                         b_col = (makeColor 0.0 0.0 0.6 1.0),
+                                         b_click_col = black,
+                                         b_text_col = black,
+                                         b_time = 1.0,
+                                         is_active = False}
+
+------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------  свойства мира   ----------------------------------------------------
+
+             text_field_w_color    = TextField {ibase = t_f_w_c_base,
+                                                t_text = "Color: (0, 0, 153)",
+                                                t_col = black,
+                                                t_scale = 0.15,
+                                                is_active = False}
+             t_f_w_c_base = IBase {place = (20, -80),
+                                   size = (300, 30),
+                                   action = (action_multi [
+                                    action_change_text 41 ((color_to_text "Color: (%d, %d, %d)") . (get_triple_from_sliders [42, 43, 44])),
+                                    action_set_world_color (get_color_from_sliders [42, 43, 44])
+                                    ]),
+                                   draw = draw_text_field,
+                                   process = process_none
+                                  }
+
+             slider_world_c_r  = Slider {ibase = s_w_c_r_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 127,
+                                         s_col = (makeColor 0.6 0.0 0.0 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_w_c_r_base = IBase {place = (50, -130),
+                                   size = (300, 40),
+                                   action = (action_slider 42),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
+
+             slider_world_c_g  = Slider {ibase = s_w_c_g_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 127,
+                                         s_col = (makeColor 0.0 0.6 0.0 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_w_c_g_base = IBase {place = (50, -180),
+                                   size = (300, 40),
+                                   action = (action_slider 43),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
+
+             slider_world_c_b  = Slider {ibase = s_w_c_b_base,
+                                         s_indent = (10, 3),
+                                         s_min = 0,
+                                         s_max = 255,
+                                         s_pts = 256,
+                                         s_curpt = 127,
+                                         s_col = (makeColor 0.0 0.0 0.6 1.0),
+                                         s_sl_size = 10,
+                                         s_sl_col = (makeColor 0.9 0.9 0.9 1.0),
+                                         s_m_act = False,
+                                         is_active = False}
+             s_w_c_b_base = IBase {place = (50, -230),
+                                   size = (300, 40),
+                                   action = (action_slider 44),
+                                   draw = draw_slider,
+                                   process = process_none
+                                  }
 
 ------------------------------------------------------------------------------------------------------------------------------
 -------------------------------------------  переключения между "страницами" интерфейса --------------------------------------

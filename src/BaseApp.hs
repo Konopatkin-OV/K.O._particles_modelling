@@ -342,12 +342,16 @@ load_world file app =
      let strings = (filter (\s -> (s /= []) && ((head (head s)) /= '#')) (map words (lines file_text))) ++ [[]]
      let new_world = ((elems app) !! 0) {
             entities = (map fromJust (filter isJust (zipWith load_particle [1..] (tail (tail strings)))))
-          , back_col = load_color_l (head strings)
+          , back_col = black -- load_color_l (head strings)
           , time_speed = 1.0
           , is_pause = True
           , constants = base_consts}
      -- волшебный мегакостыль
-     trigger_sliders (replace_int 0 new_world (load_sliders (strings !! 1) app))
+     --return (replace_int 0 new_world (load_sliders const_sliders (strings !! 1) app))
+     tmp_app <- trigger_sliders color_sliders_mod -- заменить мир сразу, один раз
+                (load_sliders color_sliders (strings !! 0) (replace_int 0 new_world app))
+     trigger_sliders const_sliders
+                (load_sliders const_sliders (strings !! 1) tmp_app)
 
 
 load_particle :: Int -> [String] -> Maybe Entity
@@ -366,18 +370,20 @@ load_color_l (col_r : (col_g : (col_b : (col_a : _)))) = makeColor (read col_r :
                                                                    (read col_b :: Float) (read col_a :: Float)
 load_color_l _ = black
 
-load_sliders :: [String] -> Application -> Application
-load_sliders consts app = if (length vals) == (length const_sliders) then new_app else app
+load_sliders :: [Int] -> [String] -> Application -> Application
+load_sliders slid consts app = if (length vals) == (length slid) then new_app else app
   where
     vals = (map fromJust (filter isJust 
            (map (readMaybe :: String -> Maybe Int) consts)))
-    new_app = (foldr set app (zip const_sliders vals))
+    new_app = (foldr set app (zip slid vals))
     set = (\(pos, val) res -> replace_int pos (((elems res) !! pos) {s_curpt = val}) res)
 
 
 -- -с-п-а-с-е-н-и-е- сохранение мира в файл
 save_world :: Application -> String -> IO ()
-save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ (write_f_list (get_slider_vals app)) ++ "\n" ++ (write_entities (entities world)))
+save_world app file = writeFile file ((write_f_list (get_slider_vals color_sliders app)) ++ "\n" 
+                                   ++ (write_f_list (get_slider_vals const_sliders app)) ++ "\n" 
+                                   ++ (write_entities (entities world)))
   where
     world = (elems app) !! 0
 
@@ -385,17 +391,26 @@ save_world app file = writeFile file ((write_color (back_col world)) ++ "\n" ++ 
 const_sliders :: [Int]
 const_sliders = [14, 16, 18, 20, 22, 24, 26]
 
-get_slider_vals :: Application -> [Int]
-get_slider_vals app = map s_curpt (get_sliders app)
+-- получить список позиций слайдеров, задающих цвет фона мира
+color_sliders :: [Int]
+color_sliders = [42, 43, 44]
 
-get_sliders :: Application -> [Interface]
-get_sliders app = (foldr get [] const_sliders)
+-- кого пинать
+color_sliders_mod :: [Int]
+color_sliders_mod = [41]
+
+get_slider_vals :: [Int] -> Application -> [Int]
+get_slider_vals sliders app = map s_curpt (get_sliders sliders app)
+
+-- можно получать не только слайдеры...
+get_sliders :: [Int] -> Application -> [Interface]
+get_sliders sliders app = (foldr get [] sliders)
   where
     get = (\pos res -> ((elems app) !! pos) : res)
 
--- читерский пинок слайдеров
-trigger_sliders :: Application -> IO Application
-trigger_sliders app = (foldr (elem_action_all event) (return app) (get_sliders app))
+-- читерский пинок слайдеров (так сложилось, что мб не только слайдеры, но идейно нужно пинать слайдеры :/)
+trigger_sliders :: [Int] -> Application -> IO Application
+trigger_sliders int app = (foldr (elem_action_all event) (return app) (get_sliders int app))
   where
     event = (EventMotion (0, 0))
 -------------
